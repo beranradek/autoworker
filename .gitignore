@@ -5,6 +5,8 @@ dist.old.*
 .env.local
 .DS_Store
 
+/.run
+
 terraform/.terraform
 terraform/.terraform.lock.hcl
 terraform/*.tfstate
