@@ -1,0 +1,26 @@
+{
+  "name": "autoworker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --enable-source-maps dist/cli.js run-once",
+    "start": "node --enable-source-maps dist/cli.js poll",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@azure/arm-appcontainers": "2.2.0",
+    "@azure/identity": "4.12.0",
+    "@octokit/rest": "22.0.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.4"
+  }
+}
+
