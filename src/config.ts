@@ -36,9 +36,7 @@ const schema = z.object({
   ACA_JOB_NAME: z.string().min(1).default("autofactory-issue-agent"),
   WORKER_IMAGE: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  // Legacy alias used in early docs; prefer OPENCODE_MODEL.
-  LLM_MODEL: z.string().optional(),
-  OPENCODE_MODEL: z.string().default("gpt-5-mini"),
+  LLM_MODEL: z.string().default("openai/gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
     .enum(["0", "1", "true", "false"])
@@ -53,7 +51,6 @@ export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & { GITH
 export function getConfig(): Config {
   const env = { ...process.env } as Record<string, string | undefined>;
   if (!env.GITHUB_TOKEN && env.GH_TOKEN) env.GITHUB_TOKEN = env.GH_TOKEN;
-  if (env.LLM_MODEL && !env.OPENCODE_MODEL) env.OPENCODE_MODEL = env.LLM_MODEL.replace(/^openai\//, "");
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");

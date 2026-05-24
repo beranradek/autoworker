@@ -7,7 +7,6 @@ Location: `docker/`
 This directory contains:
 
 - `docker/worker.Dockerfile` (primary): OpenCode (`opencode`) worker using `OPENAI_API_KEY`
-- `docker/worker-claude.Dockerfile` (secondary): legacy Claude Code worker using `ANTHROPIC_API_KEY`
 
 ## Build locally
 

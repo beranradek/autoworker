@@ -1,60 +1,68 @@
 # autoworker (PoC)
 
-Node.js server that polls a configured GitHub repo for issues that mention `@worker` and triggers an Azure Container Apps Job run using the ephemeral AI worker image.
+Polls GitHub issues in one repo and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker (OpenCode CLI) that implements the issue and posts a PR link back to the issue.
 
-## Local dev
+Supported runners:
+
+- `JOB_RUNNER=local-docker` (default): runs the worker container locally via Docker
+- `JOB_RUNNER=aca`: creates + starts per-issue Azure Container Apps Jobs
+
+## Workflow
+
+1. Find issues that mention `WORKER_MENTION` (default `@worker`)
+2. Skip anything already labeled `accepted` / `in-progress` / `done`
+3. Add `accepted` label + comment with correlation id
+4. If `DRY_RUN=false`, start the worker container/job
+5. Worker creates a branch + PR and comments the PR link on the issue
+
+## Local run (poller)
 
 ```bash
 pnpm install
 pnpm build
 cp .env.example .env
-# edit .env
 pnpm start
 ```
 
-## Worker image (local)
+Background helper (PID + logs in `.run/`):
 
-Build the ephemeral Claude worker image from this repo:
+```bash
+./scripts/poller.sh start
+./scripts/poller.sh logs
+./scripts/poller.sh stop
+```
+
+## Worker image (OpenCode)
 
 ```bash
 DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent:local -f docker/worker.Dockerfile .
 ```
 
-## Required env vars
+## Env vars
 
-### GitHub
+Minimum (local):
 
-- `GITHUB_TOKEN`
-- `GITHUB_OWNER`
-- `GITHUB_REPO`
-  - Optional: `MAX_ACCEPT_PER_RUN` (default `1`)
-  - `JOB_RUNNER`: `local-docker` (default) or `aca`
+- `GITHUB_OWNER`, `GITHUB_REPO`
+- `GITHUB_TOKEN` (or `GH_TOKEN`)
+- `DRY_RUN` (`true` = claim-only, `false` = also runs the worker)
 
-### Azure (service principal)
+When `DRY_RUN=false`:
 
-Only required for `JOB_RUNNER=aca`:
-
-- `AZURE_SUBSCRIPTION_ID`
-- `AZURE_RESOURCE_GROUP`
-- `AZURE_LOCATION` (e.g. `westeurope`)
-- `ACA_ENV_NAME`
-- Either:
-  - Managed Identity: `AZURE_USE_MANAGED_IDENTITY=true`
-  - Service principal: `AZURE_USE_MANAGED_IDENTITY=false` + `AZURE_CLIENT_ID` + `AZURE_TENANT_ID` + `AZURE_CLIENT_SECRET`
-
-### Worker job
-
-- `ACA_ENV_NAME` (Container Apps Environment name)
-- `ACA_JOB_NAME` (existing manual job name)
-- `WORKER_IMAGE` (container image ref)
+- `WORKER_IMAGE` (e.g. `autoworker-opencode-agent:local`)
 - `OPENAI_API_KEY`
-- `OPENCODE_MODEL` (default `gpt-5-mini`)
-  - Legacy alias supported: `LLM_MODEL` (e.g. `openai/gpt-5-mini`)
+- `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
 
-## Notes
+Optional:
 
-- This PoC aims to be simple (no Temporal). It focuses on idempotence and cheap operations.
-- The Azure trigger strategy is “one job resource per accepted issue” (create + start). This keeps the runtime simple, but you may want a cleanup policy later.
-- Cleanup helper: `node dist/cli.js cleanup` (uses `CLEANUP_AFTER_HOURS`, default 48; respects `DRY_RUN=true`).
-- `DRY_RUN=true` means **claim-only**: add label + comment, but do not start the worker.
-- In claim-only mode, `WORKER_IMAGE` and `OPENAI_API_KEY` are not required.
+- `POLL_INTERVAL_SECONDS` (default `60`)
+- `MAX_ACCEPT_PER_RUN` (default `1`)
+- `JOB_RUNNER` (`local-docker` or `aca`)
+
+Azure runner (`JOB_RUNNER=aca`) additionally requires:
+
+- `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_LOCATION`, `ACA_ENV_NAME`
+- Auth: either `AZURE_USE_MANAGED_IDENTITY=true` or service principal (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`)
+
+## Azure setup (Terraform)
+
+See `terraform/README.md`.

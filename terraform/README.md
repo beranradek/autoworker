@@ -26,10 +26,10 @@ Required:
 
 Optional:
 
-- `name_prefix` (default `autoworker`) – names all created resources
-- `worker_job_name_prefix` (default `autofactory-issue-agent`) – per-issue job name prefix (autoworker will create one job per accepted issue)
-- `poll_cron` (default `*/2 * * * *`) – how often the scheduled poller runs
-- `opencode_model` (default `gpt-5-mini`) – passed through to the worker container as `OPENCODE_MODEL`
+  - `name_prefix` (default `autoworker`) – names all created resources
+  - `worker_job_name_prefix` (default `autofactory-issue-agent`) – per-issue job name prefix (autoworker will create one job per accepted issue)
+  - `poll_cron` (default `*/2 * * * *`) – how often the scheduled poller runs
+  - `llm_model` (default `openai/gpt-5-mini`) – passed through to the worker container as `LLM_MODEL`
 
 ## Usage (example)
 
@@ -43,7 +43,7 @@ export TF_VAR_resource_group_name="rg-autoworker"
 export TF_VAR_location="westeurope"
 
 export TF_VAR_autoworker_image="ghcr.io/beranradek/autoworker:latest"
-export TF_VAR_worker_image="ghcr.io/beranradek/autofactory/claude-agent:latest"
+export TF_VAR_worker_image="ghcr.io/beranradek/autoworker-opencode-agent:latest"
 
 export TF_VAR_github_owner="beranradek"
 export TF_VAR_github_repo="some-repo"
@@ -60,7 +60,7 @@ To change schedule/model later:
 
 ```bash
 export TF_VAR_poll_cron="*/5 * * * *"
-export TF_VAR_opencode_model="gpt-5-mini"
+export TF_VAR_llm_model="openai/gpt-5-mini"
 terraform apply
 ```
 
