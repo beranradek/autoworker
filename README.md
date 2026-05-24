@@ -48,7 +48,8 @@ Only required for `JOB_RUNNER=aca`:
 - `ACA_JOB_NAME` (existing manual job name)
 - `WORKER_IMAGE` (container image ref)
 - `OPENAI_API_KEY`
-- `LLM_MODEL` (default `openai/gpt-5-mini`)
+- `OPENCODE_MODEL` (default `gpt-5-mini`)
+  - Legacy alias supported: `LLM_MODEL` (e.g. `openai/gpt-5-mini`)
 
 ## Notes
 
@@ -56,5 +57,4 @@ Only required for `JOB_RUNNER=aca`:
 - The Azure trigger strategy is “one job resource per accepted issue” (create + start). This keeps the runtime simple, but you may want a cleanup policy later.
 - Cleanup helper: `node dist/cli.js cleanup` (uses `CLEANUP_AFTER_HOURS`, default 48; respects `DRY_RUN=true`).
 - `DRY_RUN=true` means **claim-only**: add label + comment, but do not start the worker.
-- In claim-only mode, `WORKER_IMAGE` and `ANTHROPIC_API_KEY` are not required.
 - In claim-only mode, `WORKER_IMAGE` and `OPENAI_API_KEY` are not required.
