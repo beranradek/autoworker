@@ -38,6 +38,7 @@ The container entrypoint is a deterministic harness that:
 3. Runs `opencode run` **without** GitHub token env vars (so the agent can’t push/create PRs)
    - OpenCode is run with `--format json` for audit-friendly JSONL event output
    - The agent is instructed to write `.autoworker/result.json` (status + optional suggested commit/PR metadata)
+   - OpenCode receives only a minimal allowlist of env vars (e.g. `OPENAI_API_KEY`, `LLM_MODEL`, `PATH`, `HOME`), not the full container env
 4. Detects git changes (`git status --porcelain`)
 5. If changes exist, commits + pushes + creates a PR + comments the PR URL back to the issue (all deterministically via `git`/`gh`)
 

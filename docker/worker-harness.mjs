@@ -3,6 +3,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -94,6 +96,23 @@ async function run(cmd, args, opts) {
   });
 }
 
+async function runWithRetry(cmd, args, opts) {
+  const retryCount = Number(process.env.CMD_RETRY_COUNT ?? "2");
+  const backoffMs = Number(process.env.CMD_RETRY_BACKOFF_MS ?? "1000");
+  const timeoutMs = Number(process.env.CMD_TIMEOUT_MS ?? "120000");
+
+  let attempt = 0;
+  while (true) {
+    attempt += 1;
+    const res = await run(cmd, args, { ...(opts ?? {}), timeoutMs });
+    if (res.exitCode === 0) return res;
+
+    if (attempt > retryCount) return res;
+    log("warn", "exec.retry", { cmd, attempt, retryCount, exitCode: res.exitCode });
+    await sleep(backoffMs * attempt);
+  }
+}
+
 async function main() {
   const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -155,7 +174,7 @@ async function main() {
     // Fresh clone every run to avoid cross-run state.
     fs.rmSync(CLONE_DIR, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(CLONE_DIR), { recursive: true });
-    const cloneRes = await run("gh", ["repo", "clone", ownerRepo, CLONE_DIR], { env: ghEnv });
+    const cloneRes = await runWithRetry("gh", ["repo", "clone", ownerRepo, CLONE_DIR], { env: ghEnv });
     if (cloneRes.exitCode !== 0) die("Failed to clone repo (gh repo clone)", { exitCode: cloneRes.exitCode });
   }
 
@@ -163,14 +182,19 @@ async function main() {
   const gitEnv = { ...process.env };
 
   // Basic git identity for commits
-  await run("git", ["config", "user.email", process.env.GIT_USER_EMAIL || "autoworker@users.noreply.github.com"], { cwd: repoDir, env: gitEnv });
-  await run("git", ["config", "user.name", process.env.GIT_USER_NAME || "autoworker"], { cwd: repoDir, env: gitEnv });
+  await runWithRetry("git", ["config", "user.email", process.env.GIT_USER_EMAIL || "autoworker@users.noreply.github.com"], {
+    cwd: repoDir,
+    env: gitEnv
+  });
+  await runWithRetry("git", ["config", "user.name", process.env.GIT_USER_NAME || "autoworker"], { cwd: repoDir, env: gitEnv });
 
   let issueTitle = "";
   let issueBody = "";
   let issueUrl = ISSUE_URL;
   if (ownerRepo && issueNum) {
-    const issueJsonRes = await run("gh", ["issue", "view", issueNum, "--repo", ownerRepo, "--json", "title,body,url,number"], { env: ghEnv });
+    const issueJsonRes = await runWithRetry("gh", ["issue", "view", issueNum, "--repo", ownerRepo, "--json", "title,body,url,number"], {
+      env: ghEnv
+    });
     if (issueJsonRes.exitCode !== 0) die("Failed to fetch issue metadata (gh issue view)", { exitCode: issueJsonRes.exitCode });
     try {
       const parsed = JSON.parse(issueJsonRes.stdout);
@@ -187,7 +211,7 @@ async function main() {
   const branchName = `issue-${issueNum || "manual"}-${branchSlug || "work"}`;
 
   // Create or reset the work branch deterministically.
-  const checkoutRes = await run("git", ["checkout", "-B", branchName], { cwd: repoDir, env: gitEnv });
+  const checkoutRes = await runWithRetry("git", ["checkout", "-B", branchName], { cwd: repoDir, env: gitEnv });
   if (checkoutRes.exitCode !== 0) die("Failed to create/reset branch", { branchName, exitCode: checkoutRes.exitCode });
 
   // Prepare prompt for OpenCode. IMPORTANT: do not give it GitHub token env vars.
@@ -228,9 +252,21 @@ async function main() {
   fs.writeFileSync(promptPath, prompt, "utf8");
 
   const opencodeLogPath = path.join(ARTIFACTS_DIR, "opencode.log");
-  const opencodeEnv = { ...process.env };
-  delete opencodeEnv.GH_TOKEN;
-  delete opencodeEnv.GITHUB_TOKEN;
+  // Pass a minimal env to OpenCode to avoid leaking unrelated secrets/config.
+  const opencodeEnv = {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    USER: process.env.USER,
+    SHELL: process.env.SHELL,
+    LANG: process.env.LANG,
+    LC_ALL: process.env.LC_ALL,
+    TERM: process.env.TERM,
+    TMPDIR: process.env.TMPDIR,
+    CI: process.env.CI,
+    CHROME_BIN: process.env.CHROME_BIN,
+    OPENAI_API_KEY,
+    LLM_MODEL
+  };
 
   log("info", "opencode.start", { model: LLM_MODEL, dir: repoDir, promptPath });
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
@@ -287,12 +323,12 @@ async function main() {
     // ignore
   }
 
-  const statusRes = await run("git", ["status", "--porcelain"], { cwd: repoDir, env: gitEnv });
+  const statusRes = await runWithRetry("git", ["status", "--porcelain"], { cwd: repoDir, env: gitEnv });
   if (statusRes.exitCode !== 0) die("git status failed", { exitCode: statusRes.exitCode });
   const changes = statusRes.stdout.trim().split("\n").filter(Boolean);
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "git-status-porcelain.txt"), statusRes.stdout, "utf8");
 
-  const diffStatRes = await run("git", ["diff", "--stat"], { cwd: repoDir, env: gitEnv });
+  const diffStatRes = await runWithRetry("git", ["diff", "--stat"], { cwd: repoDir, env: gitEnv });
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "git-diff-stat.txt"), diffStatRes.stdout, "utf8");
 
   if (changes.length === 0) {
@@ -312,14 +348,14 @@ async function main() {
         const acceptedLabel = process.env.ISSUE_LABEL_ACCEPTED || "accepted";
         const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel];
         if (label) editArgs.push("--add-label", label);
-        await run("gh", editArgs, { env: ghEnv });
+        await runWithRetry("gh", editArgs, { env: ghEnv });
         const body = [`Rejected by worker.`, rejectReason ? `Reason: ${rejectReason}` : "", description ? `Details: ${description}` : ""]
           .filter(Boolean)
           .join("\n");
-        await run("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
+        await runWithRetry("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
         return;
       }
-      await run(
+      await runWithRetry(
         "gh",
         ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", `Worker finished but produced no git changes.`],
         { env: ghEnv }
@@ -350,11 +386,11 @@ async function main() {
         const acceptedLabel = process.env.ISSUE_LABEL_ACCEPTED || "accepted";
         const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel];
         if (label) editArgs.push("--add-label", label);
-        await run("gh", editArgs, { env: ghEnv });
+        await runWithRetry("gh", editArgs, { env: ghEnv });
         const body = [`Rejected by worker.`, rejectReason ? `Reason: ${rejectReason}` : "", description ? `Details: ${description}` : ""]
           .filter(Boolean)
           .join("\n");
-        await run("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
+        await runWithRetry("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
       }
       return;
     }
@@ -369,7 +405,7 @@ async function main() {
         ]
           .filter(Boolean)
           .join("\n");
-        await run("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
+        await runWithRetry("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
       }
       // Continue with deterministic PR creation only if we actually have changes;
       // this comment is informational and does not prevent opening a PR.
@@ -395,17 +431,19 @@ async function main() {
     commitMsg = `fix: #${issueNum || "manual"} ${commitTitle}`;
   }
 
-  const addRes = await run("git", ["add", "-A"], { cwd: repoDir, env: gitEnv });
+  const addRes = await runWithRetry("git", ["add", "-A"], { cwd: repoDir, env: gitEnv });
   if (addRes.exitCode !== 0) die("git add failed", { exitCode: addRes.exitCode });
 
-  const commitRes = await run("git", ["commit", "-m", commitMsg], { cwd: repoDir, env: gitEnv });
+  const commitRes = await runWithRetry("git", ["commit", "-m", commitMsg], { cwd: repoDir, env: gitEnv });
   if (commitRes.exitCode !== 0) die("git commit failed", { exitCode: commitRes.exitCode });
 
-  // Ensure authenticated remote without logging the token.
-  const remoteUrl = `https://x-access-token:${GH_TOKEN}@github.com/${ownerRepo}.git`;
-  await run("git", ["remote", "set-url", "origin", remoteUrl], { cwd: repoDir, env: gitEnv });
-
-  const pushRes = await run("git", ["push", "-u", "origin", branchName], { cwd: repoDir, env: gitEnv });
+  // Push without persisting token to git config (avoid storing token in .git/config).
+  const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
+  const pushRes = await runWithRetry(
+    "git",
+    ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, "push", "-u", "origin", branchName],
+    { cwd: repoDir, env: gitEnv }
+  );
   if (pushRes.exitCode !== 0) die("git push failed", { exitCode: pushRes.exitCode });
 
   // Create PR deterministically.
@@ -425,7 +463,9 @@ async function main() {
     .join("\n");
 
   log("info", "pr.create.start", { ownerRepo, branchName });
-  const prCreateRes = await run("gh", ["pr", "create", "--repo", ownerRepo, "--title", prTitle, "--body", prBody, "--head", branchName], { env: ghEnv });
+  const prCreateRes = await runWithRetry("gh", ["pr", "create", "--repo", ownerRepo, "--title", prTitle, "--body", prBody, "--head", branchName], {
+    env: ghEnv
+  });
   if (prCreateRes.exitCode !== 0) die("gh pr create failed", { exitCode: prCreateRes.exitCode });
 
   const prUrlMatch = prCreateRes.stdout.match(/https:\/\/github\.com\/[^\s]+/);
@@ -442,7 +482,7 @@ async function main() {
       if (desc) extra = `\n\nResult:\n${desc}`;
     }
     const commentBody = `PR: ${prUrl}${extra}`;
-    await run("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
+    await runWithRetry("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
     log("info", "issue.commented", { issueNum, prUrl });
   }
 

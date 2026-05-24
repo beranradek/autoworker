@@ -42,7 +42,9 @@ DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent
 
 Minimum (local):
 
-- `GITHUB_OWNER`, `GITHUB_REPO`
+- Either:
+  - `GITHUB_OWNER`, `GITHUB_REPO` (single repo), or
+  - `GITHUB_REPOS` (multi repo; comma/whitespace-separated `owner/repo` list)
 - `GITHUB_TOKEN` (or `GH_TOKEN`)
 - `DRY_RUN` (`true` = claim-only, `false` = also runs the worker)
 
@@ -56,6 +58,7 @@ Optional:
 
 - `POLL_INTERVAL_SECONDS` (default `60`)
 - `MAX_ACCEPT_PER_RUN` (default `1`)
+- `MAX_CONCURRENT_WORKERS` (default `5`)
 - `JOB_RUNNER` (`local-docker` or `aca`)
 
 Azure runner (`JOB_RUNNER=aca`) additionally requires:
