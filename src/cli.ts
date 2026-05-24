@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { runOnce } from "./runner/run-once.js";
 import { pollForever } from "./runner/poll.js";
 import { cleanupJobs } from "./runner/cleanup.js";

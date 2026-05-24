@@ -12,6 +12,14 @@ cp .env.example .env
 pnpm start
 ```
 
+## Worker image (local)
+
+Build the ephemeral Claude worker image from this repo:
+
+```bash
+DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-claude-agent:local -f docker/claude-agent/Dockerfile docker/claude-agent
+```
+
 ## Required env vars
 
 ### GitHub
@@ -46,3 +54,4 @@ Only required for `JOB_RUNNER=aca`:
 - This PoC aims to be simple (no Temporal). It focuses on idempotence and cheap operations.
 - The Azure trigger strategy is “one job resource per accepted issue” (create + start). This keeps the runtime simple, but you may want a cleanup policy later.
 - Cleanup helper: `node dist/cli.js cleanup` (uses `CLEANUP_AFTER_HOURS`, default 48; respects `DRY_RUN=true`).
+- `DRY_RUN=true` means **claim-only**: add label + comment, but do not start the worker.

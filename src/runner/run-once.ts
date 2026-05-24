@@ -73,25 +73,24 @@ export async function runOnce(): Promise<void> {
 
     log("info", "issue.accept", { issue: issueKey, issueUrl, runner: cfg.JOB_RUNNER, correlationId });
 
-    if (!dryRun) {
-      await addLabel(octokit, repo, issue.number, cfg.LABEL_ACCEPTED);
-      await commentAccepted(
-        octokit,
-        repo,
-        issue.number,
-        [
-          `Accepted by autoworker.`,
-          `Correlation: \`${correlationId}\``,
-          cfg.JOB_RUNNER === "aca"
-            ? `Runner: ACA (creating a per-issue job)`
-            : `Runner: local-docker (running the worker container locally)`,
-          `Worker image should create a PR and comment back here with the link.`
-        ].join("\n")
-      );
-    }
+    await addLabel(octokit, repo, issue.number, cfg.LABEL_ACCEPTED);
+    await commentAccepted(
+      octokit,
+      repo,
+      issue.number,
+      [
+        `Accepted by autoworker.`,
+        `Correlation: \`${correlationId}\``,
+        cfg.JOB_RUNNER === "aca"
+          ? `Runner: ACA (creating a per-issue job)`
+          : `Runner: local-docker (running the worker container locally)`,
+        dryRun ? `Dry run enabled: worker will NOT be started.` : `Worker image should create a PR and comment back here with the link.`
+      ].join("\n")
+    );
 
     if (dryRun) {
-      log("info", "run.dry_run", { correlationId, issueUrl });
+      log("info", "run.dry_run_claim_only", { correlationId, issueUrl });
+      accepted += 1;
       continue;
     }
 
