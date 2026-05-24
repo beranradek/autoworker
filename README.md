@@ -55,3 +55,4 @@ Only required for `JOB_RUNNER=aca`:
 - The Azure trigger strategy is “one job resource per accepted issue” (create + start). This keeps the runtime simple, but you may want a cleanup policy later.
 - Cleanup helper: `node dist/cli.js cleanup` (uses `CLEANUP_AFTER_HOURS`, default 48; respects `DRY_RUN=true`).
 - `DRY_RUN=true` means **claim-only**: add label + comment, but do not start the worker.
+- In claim-only mode, `WORKER_IMAGE` and `ANTHROPIC_API_KEY` are not required.

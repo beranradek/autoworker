@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 const schema = z.object({
-  GITHUB_TOKEN: z.string().min(1),
+  GH_TOKEN: z.string().optional(),
+  GITHUB_TOKEN: z.string().optional(),
   GITHUB_OWNER: z.string().min(1),
   GITHUB_REPO: z.string().min(1),
 
@@ -33,8 +34,8 @@ const schema = z.object({
 
   ACA_ENV_NAME: z.string().optional(),
   ACA_JOB_NAME: z.string().min(1).default("autofactory-issue-agent"),
-  WORKER_IMAGE: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().min(1),
+  WORKER_IMAGE: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
 
   CREATE_JOB_IF_MISSING: z
     .enum(["0", "1", "true", "false"])
@@ -43,13 +44,19 @@ const schema = z.object({
     .default(false)
 });
 
-export type Config = z.infer<typeof schema>;
+type RawConfig = z.infer<typeof schema>;
+export type Config = Omit<RawConfig, "GITHUB_TOKEN"> & { GITHUB_TOKEN: string };
 
 export function getConfig(): Config {
-  const parsed = schema.safeParse(process.env);
+  const env = { ...process.env } as Record<string, string | undefined>;
+  if (!env.GITHUB_TOKEN && env.GH_TOKEN) env.GITHUB_TOKEN = env.GH_TOKEN;
+  const parsed = schema.safeParse(env);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
+  }
+  if (!parsed.data.GITHUB_TOKEN) {
+    throw new Error("Missing GitHub auth: provide GITHUB_TOKEN (or GH_TOKEN)");
   }
   if (parsed.data.JOB_RUNNER === "aca") {
     if (!parsed.data.AZURE_SUBSCRIPTION_ID || !parsed.data.AZURE_RESOURCE_GROUP || !parsed.data.AZURE_LOCATION || !parsed.data.ACA_ENV_NAME) {
@@ -63,5 +70,10 @@ export function getConfig(): Config {
       }
     }
   }
-  return parsed.data;
+  if (!parsed.data.DRY_RUN) {
+    if (!parsed.data.WORKER_IMAGE || !parsed.data.ANTHROPIC_API_KEY) {
+      throw new Error("Worker config missing: provide WORKER_IMAGE + ANTHROPIC_API_KEY (or set DRY_RUN=true for claim-only mode)");
+    }
+  }
+  return parsed.data as Config;
 }
