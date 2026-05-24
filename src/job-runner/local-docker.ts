@@ -16,7 +16,9 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `GITHUB_TOKEN=${input.githubToken}`,
       "-e",
-      `ANTHROPIC_API_KEY=${input.anthropicApiKey}`,
+      `OPENAI_API_KEY=${input.openaiApiKey}`,
+      "-e",
+      `OPENCODE_MODEL=${input.opencodeModel ?? "gpt-5-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
       input.workerImage
@@ -45,4 +47,3 @@ export class LocalDockerJobRunner implements JobRunner {
     return { runner: "local-docker" };
   }
 }
-

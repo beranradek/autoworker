@@ -35,7 +35,8 @@ const schema = z.object({
   ACA_ENV_NAME: z.string().optional(),
   ACA_JOB_NAME: z.string().min(1).default("autofactory-issue-agent"),
   WORKER_IMAGE: z.string().optional(),
-  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENCODE_MODEL: z.string().default("gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
     .enum(["0", "1", "true", "false"])
@@ -45,7 +46,7 @@ const schema = z.object({
 });
 
 type RawConfig = z.infer<typeof schema>;
-export type Config = Omit<RawConfig, "GITHUB_TOKEN"> & { GITHUB_TOKEN: string };
+export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & { GITHUB_TOKEN: string; OPENAI_API_KEY?: string };
 
 export function getConfig(): Config {
   const env = { ...process.env } as Record<string, string | undefined>;
@@ -71,8 +72,8 @@ export function getConfig(): Config {
     }
   }
   if (!parsed.data.DRY_RUN) {
-    if (!parsed.data.WORKER_IMAGE || !parsed.data.ANTHROPIC_API_KEY) {
-      throw new Error("Worker config missing: provide WORKER_IMAGE + ANTHROPIC_API_KEY (or set DRY_RUN=true for claim-only mode)");
+    if (!parsed.data.WORKER_IMAGE || !parsed.data.OPENAI_API_KEY) {
+      throw new Error("Worker config missing: provide WORKER_IMAGE + OPENAI_API_KEY (or set DRY_RUN=true for claim-only mode)");
     }
   }
   return parsed.data as Config;

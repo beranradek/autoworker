@@ -1,9 +1,10 @@
 export type IssueRunInput = {
   issueUrl: string;
   githubToken: string;
-  anthropicApiKey: string;
+  openaiApiKey: string;
   workerImage: string;
   correlationId: string;
+  opencodeModel?: string;
 };
 
 export type IssueRunResult = {
@@ -14,4 +15,3 @@ export type IssueRunResult = {
 export interface JobRunner {
   runIssue(input: IssueRunInput): Promise<IssueRunResult>;
 }
-

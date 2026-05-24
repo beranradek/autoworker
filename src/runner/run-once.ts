@@ -97,9 +97,11 @@ export async function runOnce(): Promise<void> {
     const result = await runner.runIssue({
       issueUrl,
       githubToken: cfg.GITHUB_TOKEN,
-      anthropicApiKey: cfg.ANTHROPIC_API_KEY!,
+      openaiApiKey: cfg.OPENAI_API_KEY!,
       workerImage: cfg.WORKER_IMAGE!,
       correlationId
+      ,
+      opencodeModel: cfg.OPENCODE_MODEL
     });
     log("info", "run.started", { correlationId, runner: result.runner, jobName: result.jobName, issue: issueKey });
     accepted += 1;

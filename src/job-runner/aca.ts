@@ -44,7 +44,8 @@ export class AcaJobRunner implements JobRunner {
       env: {
         GH_TOKEN: input.githubToken,
         GITHUB_TOKEN: input.githubToken,
-        ANTHROPIC_API_KEY: input.anthropicApiKey,
+        OPENAI_API_KEY: input.openaiApiKey,
+        OPENCODE_MODEL: input.opencodeModel ?? "gpt-5-mini",
         ISSUE_URL: input.issueUrl
       }
     });
@@ -53,4 +54,3 @@ export class AcaJobRunner implements JobRunner {
     return { runner: "aca", jobName };
   }
 }
-

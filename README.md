@@ -17,7 +17,7 @@ pnpm start
 Build the ephemeral Claude worker image from this repo:
 
 ```bash
-DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-claude-agent:local -f docker/claude-agent/Dockerfile docker/claude-agent
+DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent:local -f docker/claude-agent/Dockerfile docker/claude-agent
 ```
 
 ## Required env vars
@@ -47,7 +47,8 @@ Only required for `JOB_RUNNER=aca`:
 - `ACA_ENV_NAME` (Container Apps Environment name)
 - `ACA_JOB_NAME` (existing manual job name)
 - `WORKER_IMAGE` (container image ref)
-- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
+- `OPENCODE_MODEL` (default `gpt-5-mini`)
 
 ## Notes
 
@@ -56,3 +57,4 @@ Only required for `JOB_RUNNER=aca`:
 - Cleanup helper: `node dist/cli.js cleanup` (uses `CLEANUP_AFTER_HOURS`, default 48; respects `DRY_RUN=true`).
 - `DRY_RUN=true` means **claim-only**: add label + comment, but do not start the worker.
 - In claim-only mode, `WORKER_IMAGE` and `ANTHROPIC_API_KEY` are not required.
+- In claim-only mode, `WORKER_IMAGE` and `OPENAI_API_KEY` are not required.

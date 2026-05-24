@@ -18,7 +18,7 @@ describe("LocalDockerJobRunner", () => {
     await runner.runIssue({
       issueUrl: "https://github.com/o/r/issues/1",
       githubToken: "gh",
-      anthropicApiKey: "ak",
+      openaiApiKey: "ok",
       workerImage: "img:tag",
       correlationId: "c1"
     });
@@ -29,4 +29,3 @@ describe("LocalDockerJobRunner", () => {
     expect(calls[0].args.join(" ")).toContain("ISSUE_URL=https://github.com/o/r/issues/1");
   });
 });
-

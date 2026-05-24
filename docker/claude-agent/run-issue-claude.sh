@@ -10,8 +10,8 @@ fi
 
 export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
-: "${OPENAI_API_KEY:=}"
-[[ -n "$OPENAI_API_KEY" ]] || die "OPENAI_API_KEY is required for OpenCode (opencode)"
+: "${ANTHROPIC_API_KEY:=}"
+[[ -n "$ANTHROPIC_API_KEY" ]] || die "ANTHROPIC_API_KEY is required for headless Claude Code runs"
 
 WORKDIR="${WORKDIR:-/workspace}"
 CLONE_DIR="${CLONE_DIR:-$WORKDIR/repo}"
@@ -75,7 +75,7 @@ if [[ -n "$owner_repo" && -n "$issue_num" ]]; then
   [[ -n "$issue_json" ]] || die "Failed to fetch issue via gh (check GH_TOKEN permissions)"
   issue_title="$(jq -r '.title // ""' <<<"$issue_json")"
   issue_body="$(jq -r '.body // ""' <<<"$issue_json")"
-  issue_url="$(jq -r '.url // ""' <<<"$issue_json")"
+  issue_url="$(jq -r '.url // \"\"' <<<"$issue_json")"
   [[ -n "$issue_url" ]] || issue_url="$ISSUE_URL"
 fi
 
@@ -107,24 +107,15 @@ body:
 ${issue_body:-<empty>}
 EOF
 
-OPENCODE_MODEL="${OPENCODE_MODEL:-gpt-5-mini}"
-OPENCODE_EXTRA_ARGS="${OPENCODE_EXTRA_ARGS:-}"
+CLAUDE_PERMISSION_MODE="${CLAUDE_PERMISSION_MODE:-bypassPermissions}"
+CLAUDE_EXTRA_ARGS="${CLAUDE_EXTRA_ARGS:-}"
 
-# Prefer OpenAI provider when GITHUB_TOKEN is present (otherwise OpenCode may try Copilot first).
-cat >"$HOME/.opencode.json" <<EOF
-{
-  "agents": {
-    "coder": { "model": "${OPENCODE_MODEL}" },
-    "task": { "model": "${OPENCODE_MODEL}" }
-  },
-  "providers": {
-    "copilot": { "disabled": true },
-    "anthropic": { "disabled": true },
-    "openai": { "disabled": false }
-  }
-}
-EOF
-
-log "Starting OpenCode CLI (opencode) with model: ${OPENCODE_MODEL}"
+log "Starting Claude Code CLI"
 set -x
-opencode --cwd "${CLONE_DIR:-$PWD}" --prompt "$(cat "$prompt_file")" $OPENCODE_EXTRA_ARGS
+claude --bare \
+  --permission-mode "$CLAUDE_PERMISSION_MODE" \
+  --dangerously-skip-permissions \
+  -p "$(cat "$prompt_file")" \
+  --allowedTools "Bash(git *),Bash(pnpm *),Bash(npm *),Bash(node *),Bash(tsc *),Bash(gradle *),Bash(java *),Bash(jq *),Bash(rg *),Bash(gh *)" \
+  $CLAUDE_EXTRA_ARGS
+
