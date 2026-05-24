@@ -56,10 +56,20 @@ async function run(cmd, args, opts) {
   log("info", "exec.start", { cmd: printable[0], args: printable.slice(1).map(redact) });
 
   return await new Promise((resolve, reject) => {
+    const { timeoutMs, ...spawnOpts } = opts ?? {};
     const child = spawn(cmd, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      ...opts
+      ...spawnOpts
     });
+
+    const timeoutMsNum = Number(timeoutMs ?? 0);
+    const timeout =
+      timeoutMsNum > 0
+        ? setTimeout(() => {
+            log("warn", "exec.timeout", { cmd: printable[0], timeoutMs: timeoutMsNum });
+            child.kill("SIGKILL");
+          }, timeoutMsNum)
+        : null;
 
     let stdout = "";
     let stderr = "";
@@ -76,6 +86,7 @@ async function run(cmd, args, opts) {
 
     child.on("error", reject);
     child.on("close", (code) => {
+      if (timeout) clearTimeout(timeout);
       const exitCode = code ?? 0;
       log(exitCode === 0 ? "info" : "warn", "exec.done", { cmd: printable[0], exitCode });
       resolve({ exitCode, stdout, stderr });
@@ -142,7 +153,8 @@ async function main() {
 
   if (ownerRepo) {
     // Fresh clone every run to avoid cross-run state.
-    await run("bash", ["-lc", `rm -rf "${CLONE_DIR}" && mkdir -p "${path.dirname(CLONE_DIR)}"`], { env: process.env });
+    fs.rmSync(CLONE_DIR, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(CLONE_DIR), { recursive: true });
     const cloneRes = await run("gh", ["repo", "clone", ownerRepo, CLONE_DIR], { env: ghEnv });
     if (cloneRes.exitCode !== 0) die("Failed to clone repo (gh repo clone)", { exitCode: cloneRes.exitCode });
   }
@@ -221,6 +233,7 @@ async function main() {
   delete opencodeEnv.GITHUB_TOKEN;
 
   log("info", "opencode.start", { model: LLM_MODEL, dir: repoDir, promptPath });
+  const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
   const ocChild = spawn(
     "opencode",
     ["run", "--format", "json", "--model", LLM_MODEL, "--dangerously-skip-permissions", "--dir", repoDir, fs.readFileSync(promptPath, "utf8")],
@@ -239,10 +252,19 @@ async function main() {
     process.stderr.write(s);
   });
 
+  const ocTimeout =
+    opencodeTimeoutMs > 0
+      ? setTimeout(() => {
+          log("warn", "opencode.timeout", { timeoutMs: opencodeTimeoutMs });
+          ocChild.kill("SIGKILL");
+        }, opencodeTimeoutMs)
+      : null;
+
   const ocExitCode = await new Promise((resolve, reject) => {
     ocChild.on("error", reject);
     ocChild.on("close", (code) => resolve(code ?? 0));
   });
+  if (ocTimeout) clearTimeout(ocTimeout);
   ocLogStream.end();
   log(ocExitCode === 0 ? "info" : "warn", "opencode.done", { exitCode: ocExitCode, opencodeLogPath });
   if (ocExitCode !== 0) {
