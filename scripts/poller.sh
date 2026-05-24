@@ -7,6 +7,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNDIR="${RUNDIR:-$PROJECT_DIR/.run}"
 PIDFILE="$RUNDIR/poller.pid"
 LOGFILE="${LOGFILE:-$RUNDIR/poller.log}"
+PATTERN='node --enable-source-maps dist/cli.js poll'
 
 mkdir -p "$RUNDIR"
 
@@ -34,10 +35,10 @@ case "$cmd" in
 
     # Detach from the current shell so the poller can keep running.
     # Note: uses the current environment (incl. GH_TOKEN/GITHUB_TOKEN if set).
-    setsid -f bash -lc "cd \"$PROJECT_DIR\" && exec node --enable-source-maps dist/cli.js poll" >>"$LOGFILE" 2>&1
+    setsid -f bash -lc "cd \"$PROJECT_DIR\" && exec ${PATTERN}" >>"$LOGFILE" 2>&1
 
     # setsid -f does not reliably expose the child pid; find the newest matching process.
-    pid="$(ps -eo pid,lstart,cmd | rg -n --fixed-strings -- 'node --enable-source-maps dist/cli.js poll' | tail -n 1 | awk '{print $1}' || true)"
+    pid="$(pgrep -fn "$PATTERN" 2>/dev/null || true)"
     if [[ -z "${pid:-}" ]]; then
       echo "Failed to start poller. See log: $LOGFILE"
       exit 1
@@ -68,10 +69,10 @@ case "$cmd" in
       if is_alive "$pid"; then
         kill -9 "$pid" 2>/dev/null || true
       fi
-      echo "Stopped (pid $pid)"
-    else
-      echo "Not running (stale pid $pid)."
     fi
+    # Safety: also stop any other stray pollers (e.g. if start was run multiple times).
+    pkill -f "$PATTERN" 2>/dev/null || true
+    echo "Stopped."
     rm -f "$PIDFILE" || true
     ;;
 
