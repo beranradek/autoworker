@@ -1,4 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config({ override: true });
 import { runOnce } from "./runner/run-once.js";
 import { pollForever } from "./runner/poll.js";
 import { cleanupJobs } from "./runner/cleanup.js";
