@@ -1,6 +1,6 @@
 # autoworker (PoC)
 
-Polls GitHub issues in one repo and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker (OpenCode CLI) that implements the issue and posts a PR link back to the issue.
+Polls GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker (OpenCode CLI) that implements the issue and posts a PR link back to the issue.
 
 Supported runners:
 
@@ -14,6 +14,8 @@ Supported runners:
 3. Add `accepted` label + comment with correlation id
 4. If `DRY_RUN=false`, start the worker container/job
 5. Worker runs OpenCode to edit files; then the worker harness deterministically commits/pushes/creates PR and comments the PR link back to the issue
+
+Security note: OpenCode runs without GitHub token env vars (and with a minimal allowlist of env vars); only the harness performs GitHub operations.
 
 ## Local run (poller)
 
