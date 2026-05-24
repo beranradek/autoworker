@@ -11,6 +11,7 @@ const schema = z.object({
   LABEL_DONE: z.string().default("done"),
 
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
+  MAX_ACCEPT_PER_RUN: z.coerce.number().int().positive().default(1),
   DRY_RUN: z
     .enum(["0", "1", "true", "false"])
     .optional()

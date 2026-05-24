@@ -26,7 +26,20 @@ export type CreateJobInput = {
 };
 
 export async function createManualJob(client: ContainerAppsAPIClient, input: CreateJobInput): Promise<void> {
-  const envVars = Object.entries(input.env).map(([name, value]) => ({ name, value }));
+  const secrets: Array<{ name: string; value: string }> = [];
+  const envVars: Array<Record<string, unknown>> = [];
+
+  for (const [name, value] of Object.entries(input.env)) {
+    const lower = name.toLowerCase();
+    const isSecret = lower.includes("token") || lower.includes("key") || lower.includes("secret");
+    if (isSecret) {
+      const secretName = lower.replaceAll(/[^a-z0-9-]/g, "-");
+      secrets.push({ name: secretName, value });
+      envVars.push({ name, secretRef: secretName });
+    } else {
+      envVars.push({ name, value });
+    }
+  }
 
   const job: Job = {
     location: input.location,
@@ -35,7 +48,8 @@ export async function createManualJob(client: ContainerAppsAPIClient, input: Cre
       configuration: {
         triggerType: "Manual",
         replicaTimeout: 7200,
-        replicaRetryLimit: 0
+        replicaRetryLimit: 0,
+        secrets
       },
       template: {
         containers: [

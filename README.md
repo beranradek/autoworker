@@ -19,6 +19,7 @@ pnpm start
 - `GITHUB_TOKEN`
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
+  - Optional: `MAX_ACCEPT_PER_RUN` (default `1`)
 
 ### Azure (service principal)
 
@@ -40,3 +41,4 @@ pnpm start
 
 - This PoC aims to be simple (no Temporal). It focuses on idempotence and cheap operations.
 - The Azure trigger strategy is “one job resource per accepted issue” (create + start). This keeps the runtime simple, but you may want a cleanup policy later.
+- Cleanup helper: `node dist/cli.js cleanup` (uses `CLEANUP_AFTER_HOURS`, default 48; respects `DRY_RUN=true`).

@@ -41,7 +41,13 @@ export async function runOnce(): Promise<void> {
 
   const blockedLabels = [cfg.LABEL_ACCEPTED, cfg.LABEL_IN_PROGRESS, cfg.LABEL_DONE];
 
+  let accepted = 0;
   for (const issue of issues) {
+    if (accepted >= cfg.MAX_ACCEPT_PER_RUN) {
+      log("info", "poll.accept_limit_reached", { accepted, max: cfg.MAX_ACCEPT_PER_RUN });
+      break;
+    }
+
     const issueKey = `${repo.owner}/${repo.repo}#${issue.number}`;
     const issueUrl = issue.url;
 
@@ -110,6 +116,7 @@ export async function runOnce(): Promise<void> {
 
     await startJob(aca, cfg.AZURE_RESOURCE_GROUP, jobName);
     log("info", "aca.started", { jobName, issue: issueKey });
+    accepted += 1;
   }
 
   log("info", "poll.done");
