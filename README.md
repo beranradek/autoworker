@@ -1,11 +1,11 @@
-# autoworker (PoC)
+# Autoworker
 
-Polls GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker (OpenCode CLI) that implements the issue and posts a PR link back to the issue.
+Polls GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker container (OpenCode CLI with harness) that implements the issue and posts a PR link back to the issue.
 
 Supported runners:
 
-- `JOB_RUNNER=local-docker` (default): runs the worker container locally via Docker
-- `JOB_RUNNER=aca`: creates + starts per-issue Azure Container Apps Jobs
+- `JOB_RUNNER=local-docker` (default): runs the worker containers locally from main Node.js server via Docker
+- `JOB_RUNNER=aca`: creates + starts remote per-issue Azure Container Apps Jobs from main Node.js server
 
 ## Workflow
 
@@ -29,9 +29,9 @@ pnpm start
 Background helper (PID + logs in `.run/`):
 
 ```bash
-./scripts/poller.sh start
-./scripts/poller.sh logs
-./scripts/poller.sh stop
+./poller.sh start
+./poller.sh logs
+./poller.sh stop
 ```
 
 ## Worker image (OpenCode)
