@@ -414,7 +414,12 @@ async function main() {
 
   // Comment back to the issue deterministically.
   if (ownerRepo && issueNum) {
-    const commentBody = `PR: ${prUrl}`;
+    let extra = "";
+    if (resultFile.ok && String(resultFile.parsed?.status ?? "") === "success") {
+      const desc = cleanSingleLine(resultFile.parsed?.description ?? "", 1200);
+      if (desc) extra = `\n\nResult:\n${desc}`;
+    }
+    const commentBody = `PR: ${prUrl}${extra}`;
     await run("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
     log("info", "issue.commented", { issueNum, prUrl });
   }
