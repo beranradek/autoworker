@@ -37,7 +37,7 @@ case "$cmd" in
     setsid -f bash -lc "cd \"$PROJECT_DIR\" && exec node --enable-source-maps dist/cli.js poll" >>"$LOGFILE" 2>&1
 
     # setsid -f does not reliably expose the child pid; find the newest matching process.
-    pid="$(ps -eo pid,lstart,cmd | rg -n --fixed-strings -- \"node --enable-source-maps dist/cli.js poll\" | tail -n 1 | awk '{print $1}' || true)"
+    pid="$(ps -eo pid,lstart,cmd | rg -n --fixed-strings -- 'node --enable-source-maps dist/cli.js poll' | tail -n 1 | awk '{print $1}' || true)"
     if [[ -z "${pid:-}" ]]; then
       echo "Failed to start poller. See log: $LOGFILE"
       exit 1
