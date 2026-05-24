@@ -27,3 +27,16 @@ docker run --rm -it autoworker-opencode-agent:local bash -lc 'whoami && opencode
 - `GH_TOKEN` or `GITHUB_TOKEN` (required for cloning + PR/comment)
 - `ISSUE_URL` (recommended) or (`ISSUE_REPO` + `ISSUE_NUMBER`) or `ISSUE_TEXT`
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
+- `VERIFY_CMD` (optional) – shell command run after OpenCode (fails the run if non-zero)
+
+## Deterministic harness
+
+The container entrypoint is a deterministic harness that:
+
+1. Clones the repo (`gh repo clone`) using `GH_TOKEN`
+2. Creates/resets a deterministic branch (`issue-<n>-<slug>`)
+3. Runs `opencode run` **without** GitHub token env vars (so the agent can’t push/create PRs)
+4. Detects git changes (`git status --porcelain`)
+5. If changes exist, commits + pushes + creates a PR + comments the PR URL back to the issue (all deterministically via `git`/`gh`)
+
+Artifacts are written under `/workspace/artifacts` (configurable via `ARTIFACTS_DIR`).

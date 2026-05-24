@@ -72,6 +72,8 @@ RUN mkdir -p /opt/gradle \
 RUN npm install -g pnpm typescript opencode-ai \
   && npm cache clean --force
 
+RUN mkdir -p /usr/local/lib/autoworker
+COPY --chmod=755 docker/worker-harness.mjs /usr/local/lib/autoworker/worker-harness.mjs
 COPY --chmod=755 docker/worker-run-issue.sh /usr/local/bin/autoworker-issue
 
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node \
@@ -83,4 +85,3 @@ RUN mkdir -p /workspace && chown -R node:node /workspace
 
 USER node
 ENTRYPOINT ["/usr/local/bin/autoworker-issue"]
-

@@ -13,7 +13,7 @@ Supported runners:
 2. Skip anything already labeled `accepted` / `in-progress` / `done`
 3. Add `accepted` label + comment with correlation id
 4. If `DRY_RUN=false`, start the worker container/job
-5. Worker creates a branch + PR and comments the PR link on the issue
+5. Worker runs OpenCode to edit files; then the worker harness deterministically commits/pushes/creates PR and comments the PR link back to the issue
 
 ## Local run (poller)
 
