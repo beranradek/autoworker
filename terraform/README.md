@@ -20,7 +20,7 @@ Required:
 - `location` – Azure region (e.g. `westeurope`)
 - `autoworker_image` – image for the poller (this repo)
 - `worker_image` – worker image that will create PRs for accepted issues
-- `github_owner`, `github_repo` – repo to poll
+- `github_repos` – repos to poll (comma/whitespace-separated `owner/repo` list; can be a single entry)
 - `github_token` – PAT/token with access to read/write issues in the repo
 - `openai_api_key` – passed through to the worker container as `OPENAI_API_KEY`
 
@@ -45,8 +45,7 @@ export TF_VAR_location="westeurope"
 export TF_VAR_autoworker_image="ghcr.io/beranradek/autoworker:latest"
 export TF_VAR_worker_image="ghcr.io/beranradek/autoworker-opencode-agent:latest"
 
-export TF_VAR_github_owner="beranradek"
-export TF_VAR_github_repo="some-repo"
+export TF_VAR_github_repos="beranradek/some-repo"
 
 # Secrets (PoC): do NOT commit these; prefer Key Vault for real usage.
 export TF_VAR_github_token="ghp_..."

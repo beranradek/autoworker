@@ -64,12 +64,8 @@ resource "azurerm_container_app_job" "poller" {
       memory = "0.5Gi"
 
       env {
-        name  = "GITHUB_OWNER"
-        value = var.github_owner
-      }
-      env {
-        name  = "GITHUB_REPO"
-        value = var.github_repo
+        name  = "GITHUB_REPOS"
+        value = var.github_repos
       }
       env {
         name  = "WORKER_IMAGE"

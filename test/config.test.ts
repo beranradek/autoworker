@@ -16,11 +16,9 @@ describe("getConfig", () => {
     withEnv(
       {
         GITHUB_TOKEN: "x",
-        GITHUB_OWNER: "o",
-        GITHUB_REPO: "r",
+        GITHUB_REPOS: "o/r",
         JOB_RUNNER: "local-docker",
-        WORKER_IMAGE: "worker:latest",
-        ANTHROPIC_API_KEY: "k"
+        DRY_RUN: "true"
       },
       () => {
         const cfg = getConfig();
@@ -33,11 +31,9 @@ describe("getConfig", () => {
     withEnv(
       {
         GITHUB_TOKEN: "x",
-        GITHUB_OWNER: "o",
-        GITHUB_REPO: "r",
+        GITHUB_REPOS: "o/r",
         JOB_RUNNER: "aca",
-        WORKER_IMAGE: "worker:latest",
-        ANTHROPIC_API_KEY: "k"
+        DRY_RUN: "true"
       },
       () => {
         expect(() => getConfig()).toThrow(/ACA runner requires/);
@@ -45,4 +41,3 @@ describe("getConfig", () => {
     );
   });
 });
-

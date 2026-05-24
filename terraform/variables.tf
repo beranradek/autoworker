@@ -28,12 +28,9 @@ variable "worker_job_name_prefix" {
   default = "autofactory-issue-agent"
 }
 
-variable "github_owner" {
-  type = string
-}
-
-variable "github_repo" {
-  type = string
+variable "github_repos" {
+  type        = string
+  description = "Comma/whitespace-separated list of owner/repo entries to poll (can be a single entry)"
 }
 
 variable "github_token" {

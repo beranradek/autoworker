@@ -42,9 +42,7 @@ DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent
 
 Minimum (local):
 
-- Either:
-  - `GITHUB_OWNER`, `GITHUB_REPO` (single repo), or
-  - `GITHUB_REPOS` (multi repo; comma/whitespace-separated `owner/repo` list)
+- `GITHUB_REPOS` (comma/whitespace-separated `owner/repo` list; can contain a single entry)
 - `GITHUB_TOKEN` (or `GH_TOKEN`)
 - `DRY_RUN` (`true` = claim-only, `false` = also runs the worker)
 

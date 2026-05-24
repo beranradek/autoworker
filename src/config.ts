@@ -3,11 +3,8 @@ import { z } from "zod";
 const schema = z.object({
   GH_TOKEN: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
-  // Single-repo mode
-  GITHUB_OWNER: z.string().min(1).optional(),
-  GITHUB_REPO: z.string().min(1).optional(),
-  // Multi-repo mode: comma/whitespace-separated list of "owner/repo"
-  GITHUB_REPOS: z.string().min(1).optional(),
+  // Comma/whitespace-separated list of "owner/repo" (can contain a single entry)
+  GITHUB_REPOS: z.string().min(1),
 
   JOB_RUNNER: z.enum(["local-docker", "aca"]).default("local-docker"),
 
@@ -59,12 +56,6 @@ export function getConfig(): Config {
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
-  }
-  const reposRaw = (parsed.data.GITHUB_REPOS ?? "").trim();
-  if (!reposRaw) {
-    if (!parsed.data.GITHUB_OWNER || !parsed.data.GITHUB_REPO) {
-      throw new Error("Provide either GITHUB_REPOS (owner/repo list) or (GITHUB_OWNER + GITHUB_REPO)");
-    }
   }
   if (!parsed.data.GITHUB_TOKEN) {
     throw new Error("Missing GitHub auth: provide GITHUB_TOKEN (or GH_TOKEN)");

@@ -19,19 +19,14 @@ export async function runOnce(): Promise<void> {
   const dryRun = Boolean(cfg.DRY_RUN);
   const octokit = createGitHubClient(cfg.GITHUB_TOKEN);
 
-  const repos: RepoRef[] = (() => {
-    const raw = (cfg.GITHUB_REPOS ?? "").trim();
-    if (!raw) return [{ owner: cfg.GITHUB_OWNER!, repo: cfg.GITHUB_REPO! }];
-    return raw
-      .split(/[\s,]+/g)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((full) => {
-        const [owner, repo] = full.split("/", 2);
-        if (!owner || !repo) throw new Error(`Invalid GITHUB_REPOS entry (expected owner/repo): ${full}`);
-        return { owner, repo };
-      });
-  })();
+  const repos: RepoRef[] = cfg.GITHUB_REPOS.split(/[\s,]+/g)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((full) => {
+      const [owner, repo] = full.split("/", 2);
+      if (!owner || !repo) throw new Error(`Invalid GITHUB_REPOS entry (expected owner/repo): ${full}`);
+      return { owner, repo };
+    });
 
   log("info", "poll.start", { repos: repos.map((r) => `${r.owner}/${r.repo}`), dryRun });
 
