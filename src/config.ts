@@ -17,7 +17,7 @@ const schema = z.object({
   MAX_ACCEPT_PER_RUN: z.coerce.number().int().positive().default(1),
   DRY_RUN: z
     .enum(["0", "1", "true", "false"])
-    .optional()
+    .default("false")
     .transform((v) => v === "1" || v === "true"),
 
   AZURE_SUBSCRIPTION_ID: z.string().optional(),

@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 
-dotenv.config({ override: true });
+// In production, never override already-provided env vars.
+dotenv.config({ override: false });
 import { runOnce } from "./runner/run-once.js";
 import { pollForever } from "./runner/poll.js";
 import { cleanupJobs } from "./runner/cleanup.js";
