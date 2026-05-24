@@ -4,7 +4,7 @@ export type IssueRunInput = {
   openaiApiKey: string;
   workerImage: string;
   correlationId: string;
-  opencodeModel?: string;
+  llmModel?: string;
 };
 
 export type IssueRunResult = {

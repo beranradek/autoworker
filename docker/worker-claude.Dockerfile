@@ -2,7 +2,6 @@ FROM node:22-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Versions can be overridden at build time
 ARG JAVA_VERSION=25
 ARG GRADLE_VERSION=8.14.5
 
@@ -28,7 +27,6 @@ RUN apt-get update \
     dirmngr \
   && rm -rf /var/lib/apt/lists/*
 
-# GitHub CLI (gh) via official apt repo
 RUN mkdir -p /etc/apt/keyrings \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | dd of=/etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -39,7 +37,6 @@ RUN mkdir -p /etc/apt/keyrings \
   && apt-get install -y --no-install-recommends gh \
   && rm -rf /var/lib/apt/lists/*
 
-# Eclipse Temurin JDK (Adoptium) via Adoptium API tarball (multi-arch)
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
       amd64) ADOPTIUM_ARCH="x64" ;; \
@@ -57,33 +54,27 @@ RUN case "${TARGETARCH}" in \
 
 ENV JAVA_HOME=/opt/java/current
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-# Ensure `java` works even in login shells that reset PATH (e.g. `bash -l`)
 RUN ln -sf "${JAVA_HOME}/bin/java" /usr/local/bin/java \
   && ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac
 
-# Gradle binary distribution (avoid stale distro packages)
 RUN mkdir -p /opt/gradle \
   && curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip \
   && unzip -q /tmp/gradle.zip -d /opt/gradle \
   && rm -f /tmp/gradle.zip \
   && ln -s "/opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle
 
-# Global JS tooling + Claude Code CLI
 RUN npm install -g pnpm typescript @anthropic-ai/claude-code \
   && npm cache clean --force
 
-# Default per-issue runner entrypoint
-COPY --chmod=755 run-issue-claude.sh /usr/local/bin/autoworker-claude-issue
+COPY --chmod=755 docker/worker-run-issue-claude.sh /usr/local/bin/autoworker-claude-issue
 
-# Allow the non-root `node` user to use sudo without password (useful in ephemeral sandboxes)
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node \
   && chmod 0440 /etc/sudoers.d/node
 
 ENV CHROME_BIN=/usr/bin/chromium
 WORKDIR /workspace
+RUN mkdir -p /workspace && chown -R node:node /workspace
 
 USER node
-
 ENTRYPOINT ["/usr/local/bin/autoworker-claude-issue"]
 

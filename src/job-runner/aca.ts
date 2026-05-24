@@ -45,7 +45,7 @@ export class AcaJobRunner implements JobRunner {
         GH_TOKEN: input.githubToken,
         GITHUB_TOKEN: input.githubToken,
         OPENAI_API_KEY: input.openaiApiKey,
-        OPENCODE_MODEL: input.opencodeModel ?? "gpt-5-mini",
+        LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
         ISSUE_URL: input.issueUrl
       }
     });

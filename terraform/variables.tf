@@ -41,13 +41,17 @@ variable "github_token" {
   sensitive = true
 }
 
-variable "anthropic_api_key" {
+variable "openai_api_key" {
   type      = string
   sensitive = true
+}
+
+variable "llm_model" {
+  type    = string
+  default = "openai/gpt-5-mini"
 }
 
 variable "poll_cron" {
   type    = string
   default = "*/2 * * * *"
 }
-

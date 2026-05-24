@@ -17,7 +17,7 @@ pnpm start
 Build the ephemeral Claude worker image from this repo:
 
 ```bash
-DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent:local -f docker/claude-agent/Dockerfile docker/claude-agent
+DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent:local -f docker/worker.Dockerfile .
 ```
 
 ## Required env vars
@@ -48,7 +48,7 @@ Only required for `JOB_RUNNER=aca`:
 - `ACA_JOB_NAME` (existing manual job name)
 - `WORKER_IMAGE` (container image ref)
 - `OPENAI_API_KEY`
-- `OPENCODE_MODEL` (default `gpt-5-mini`)
+- `LLM_MODEL` (default `openai/gpt-5-mini`)
 
 ## Notes
 

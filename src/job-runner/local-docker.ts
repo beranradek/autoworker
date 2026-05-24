@@ -18,7 +18,7 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `OPENAI_API_KEY=${input.openaiApiKey}`,
       "-e",
-      `OPENCODE_MODEL=${input.opencodeModel ?? "gpt-5-mini"}`,
+      `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
       input.workerImage

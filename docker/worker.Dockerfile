@@ -58,7 +58,6 @@ RUN case "${TARGETARCH}" in \
 ENV JAVA_HOME=/opt/java/current
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-# Ensure `java` works even in login shells that reset PATH (e.g. `bash -l`)
 RUN ln -sf "${JAVA_HOME}/bin/java" /usr/local/bin/java \
   && ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac
 
@@ -69,22 +68,19 @@ RUN mkdir -p /opt/gradle \
   && rm -f /tmp/gradle.zip \
   && ln -s "/opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle
 
-# Global JS tooling + OpenCode CLI
-# Install methods documented at https://opencode.ai/download
+# OpenCode CLI (install methods documented at https://opencode.ai/download)
 RUN npm install -g pnpm typescript opencode-ai \
   && npm cache clean --force
 
-# Default per-issue runner entrypoint
-COPY --chmod=755 run-issue.sh /usr/local/bin/autoworker-issue
+COPY --chmod=755 docker/worker-run-issue.sh /usr/local/bin/autoworker-issue
 
-# Allow the non-root `node` user to use sudo without password (useful in ephemeral sandboxes)
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node \
   && chmod 0440 /etc/sudoers.d/node
 
 ENV CHROME_BIN=/usr/bin/chromium
 WORKDIR /workspace
+RUN mkdir -p /workspace && chown -R node:node /workspace
 
-# OpenCode runs as non-root to reduce risk in ephemeral workers
 USER node
-
 ENTRYPOINT ["/usr/local/bin/autoworker-issue"]
+

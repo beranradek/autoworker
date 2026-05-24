@@ -99,9 +99,8 @@ export async function runOnce(): Promise<void> {
       githubToken: cfg.GITHUB_TOKEN,
       openaiApiKey: cfg.OPENAI_API_KEY!,
       workerImage: cfg.WORKER_IMAGE!,
-      correlationId
-      ,
-      opencodeModel: cfg.OPENCODE_MODEL
+      correlationId,
+      llmModel: cfg.LLM_MODEL
     });
     log("info", "run.started", { correlationId, runner: result.runner, jobName: result.jobName, issue: issueKey });
     accepted += 1;

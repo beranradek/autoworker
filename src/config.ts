@@ -36,7 +36,7 @@ const schema = z.object({
   ACA_JOB_NAME: z.string().min(1).default("autofactory-issue-agent"),
   WORKER_IMAGE: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  OPENCODE_MODEL: z.string().default("gpt-5-mini"),
+  LLM_MODEL: z.string().default("openai/gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
     .enum(["0", "1", "true", "false"])

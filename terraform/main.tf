@@ -106,8 +106,12 @@ resource "azurerm_container_app_job" "poller" {
         value = var.github_token
       }
       env {
-        name  = "ANTHROPIC_API_KEY"
-        value = var.anthropic_api_key
+        name  = "OPENAI_API_KEY"
+        value = var.openai_api_key
+      }
+      env {
+        name  = "LLM_MODEL"
+        value = var.llm_model
       }
     }
   }

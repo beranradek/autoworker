@@ -62,6 +62,9 @@ else
   cd "$WORKDIR"
 fi
 
+git config user.email "${GIT_USER_EMAIL:-autoworker@users.noreply.github.com}"
+git config user.name "${GIT_USER_NAME:-autoworker}"
+
 issue_title=""
 issue_body=""
 issue_url="$ISSUE_URL"
@@ -92,11 +95,11 @@ Task: resolve the GitHub issue below. Make the smallest correct change that fixe
 If a code change is needed:
 1) Create a new branch (e.g. issue-${issue_num:-manual})
 2) Implement the fix
-3) Run the project's fastest relevant checks (unit tests/lint/typecheck/build if available)
+3) Run only very fast, low-risk checks (skip anything that needs extra services/toolchains)
 4) Commit changes with a clear message
-5) Push the branch to origin (requires GH_TOKEN)
-6) Open a PR referencing the issue (requires GH_TOKEN)
-7) Comment the PR link back to the issue (requires GH_TOKEN)
+5) Push the branch to origin (GH_TOKEN is available in the environment)
+6) Open a PR referencing the issue (GH_TOKEN is available in the environment)
+7) Comment the PR link back to the issue (GH_TOKEN is available in the environment)
 
 Issue:
 repo: ${owner_repo:-<not-provided>}
@@ -107,24 +110,15 @@ body:
 ${issue_body:-<empty>}
 EOF
 
-OPENCODE_MODEL="${OPENCODE_MODEL:-gpt-5-mini}"
+LLM_MODEL="${LLM_MODEL:-openai/gpt-5-mini}"
 OPENCODE_EXTRA_ARGS="${OPENCODE_EXTRA_ARGS:-}"
 
-# Prefer OpenAI provider when GITHUB_TOKEN is present (otherwise OpenCode may try Copilot first).
-cat >"$HOME/.opencode.json" <<EOF
-{
-  "agents": {
-    "coder": { "model": "${OPENCODE_MODEL}" },
-    "task": { "model": "${OPENCODE_MODEL}" }
-  },
-  "providers": {
-    "copilot": { "disabled": true },
-    "anthropic": { "disabled": true },
-    "openai": { "disabled": false }
-  }
-}
-EOF
-
-log "Starting OpenCode CLI (opencode) with model: ${OPENCODE_MODEL}"
+log "Starting OpenCode CLI (opencode) with model: ${LLM_MODEL}"
 set -x
-opencode --cwd "${CLONE_DIR:-$PWD}" --prompt "$(cat "$prompt_file")" $OPENCODE_EXTRA_ARGS
+opencode run \
+  --model "${LLM_MODEL}" \
+  --dangerously-skip-permissions \
+  --dir "${CLONE_DIR:-$PWD}" \
+  "$(cat "$prompt_file")" \
+  $OPENCODE_EXTRA_ARGS
+
