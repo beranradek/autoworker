@@ -34,7 +34,7 @@ const schema = z.object({
   AZURE_CLIENT_SECRET: z.string().optional(),
 
   ACA_ENV_NAME: z.string().optional(),
-  ACA_JOB_NAME: z.string().min(1).default("autofactory-issue-agent"),
+  ACA_JOB_NAME: z.string().min(1).default("issue-agent"),
   WORKER_IMAGE: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   LLM_MODEL: z.string().default("openai/gpt-5-mini"),

@@ -12,13 +12,13 @@ This directory contains:
 
 ```bash
 cd dev/autoworker
-DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent:local -f docker/worker.Dockerfile .
+DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker:local -f docker/worker.Dockerfile .
 ```
 
 ## Smoke test
 
 ```bash
-docker run --rm -it autoworker-opencode-agent:local bash -lc 'whoami && opencode --version && node -v && java -version && gradle -v && gh --version && rg --version && python3 --version && chromium --version'
+docker run --rm -it autoworker:local bash -lc 'whoami && opencode --version && node -v && java -version && gradle -v && gh --version && rg --version && python3 --version && chromium --version'
 ```
 
 ## Runtime inputs (env vars)

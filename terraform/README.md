@@ -27,7 +27,7 @@ Required:
 Optional:
 
   - `name_prefix` (default `autoworker`) – names all created resources
-  - `worker_job_name_prefix` (default `autofactory-issue-agent`) – per-issue job name prefix (autoworker will create one job per accepted issue)
+- `worker_job_name_prefix` (default `issue-agent`) – per-issue job name prefix (autoworker will create one job per accepted issue)
   - `poll_cron` (default `*/2 * * * *`) – how often the scheduled poller runs
   - `llm_model` (default `openai/gpt-5-mini`) – passed through to the worker container as `LLM_MODEL`
 
@@ -43,7 +43,7 @@ export TF_VAR_resource_group_name="rg-autoworker"
 export TF_VAR_location="westeurope"
 
 export TF_VAR_autoworker_image="ghcr.io/beranradek/autoworker:latest"
-export TF_VAR_worker_image="ghcr.io/beranradek/autoworker-opencode-agent:latest"
+export TF_VAR_worker_image="ghcr.io/beranradek/autoworker:latest"
 
 export TF_VAR_github_repos="beranradek/some-repo"
 

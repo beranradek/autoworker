@@ -25,7 +25,7 @@ variable "worker_image" {
 
 variable "worker_job_name_prefix" {
   type    = string
-  default = "autofactory-issue-agent"
+  default = "issue-agent"
 }
 
 variable "github_repos" {

@@ -37,7 +37,7 @@ Background helper (PID + logs in `.run/`):
 ## Worker image (OpenCode)
 
 ```bash
-DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-opencode-agent:local -f docker/worker.Dockerfile .
+DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker:local -f docker/worker.Dockerfile .
 ```
 
 ## Env vars
@@ -50,7 +50,7 @@ Minimum (local):
 
 When `DRY_RUN=false`:
 
-- `WORKER_IMAGE` (e.g. `autoworker-opencode-agent:local`)
+- `WORKER_IMAGE` (e.g. `autoworker:local`)
 - `OPENAI_API_KEY`
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
 
