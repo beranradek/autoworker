@@ -9,7 +9,7 @@
     "dev": "node --enable-source-maps dist/cli.js run-once",
     "start": "node --enable-source-maps dist/cli.js poll",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "@azure/arm-appcontainers": "2.2.0",
@@ -23,4 +23,3 @@
     "vitest": "4.1.4"
   }
 }
-

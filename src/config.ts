@@ -5,6 +5,8 @@ const schema = z.object({
   GITHUB_OWNER: z.string().min(1),
   GITHUB_REPO: z.string().min(1),
 
+  JOB_RUNNER: z.enum(["local-docker", "aca"]).default("local-docker"),
+
   WORKER_MENTION: z.string().default("@worker"),
   LABEL_ACCEPTED: z.string().default("accepted"),
   LABEL_IN_PROGRESS: z.string().default("in-progress"),
@@ -17,9 +19,9 @@ const schema = z.object({
     .optional()
     .transform((v) => v === "1" || v === "true"),
 
-  AZURE_SUBSCRIPTION_ID: z.string().min(1),
-  AZURE_RESOURCE_GROUP: z.string().min(1),
-  AZURE_LOCATION: z.string().min(1),
+  AZURE_SUBSCRIPTION_ID: z.string().optional(),
+  AZURE_RESOURCE_GROUP: z.string().optional(),
+  AZURE_LOCATION: z.string().optional(),
   AZURE_USE_MANAGED_IDENTITY: z
     .enum(["0", "1", "true", "false"])
     .optional()
@@ -29,8 +31,8 @@ const schema = z.object({
   AZURE_CLIENT_ID: z.string().optional(),
   AZURE_CLIENT_SECRET: z.string().optional(),
 
-  ACA_ENV_NAME: z.string().min(1),
-  ACA_JOB_NAME: z.string().min(1),
+  ACA_ENV_NAME: z.string().optional(),
+  ACA_JOB_NAME: z.string().min(1).default("autofactory-issue-agent"),
   WORKER_IMAGE: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
 
@@ -49,11 +51,16 @@ export function getConfig(): Config {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  if (!parsed.data.AZURE_USE_MANAGED_IDENTITY) {
-    if (!parsed.data.AZURE_TENANT_ID || !parsed.data.AZURE_CLIENT_ID || !parsed.data.AZURE_CLIENT_SECRET) {
-      throw new Error(
-        "Azure auth config missing: either set AZURE_USE_MANAGED_IDENTITY=true, or provide AZURE_TENANT_ID + AZURE_CLIENT_ID + AZURE_CLIENT_SECRET"
-      );
+  if (parsed.data.JOB_RUNNER === "aca") {
+    if (!parsed.data.AZURE_SUBSCRIPTION_ID || !parsed.data.AZURE_RESOURCE_GROUP || !parsed.data.AZURE_LOCATION || !parsed.data.ACA_ENV_NAME) {
+      throw new Error("ACA runner requires AZURE_SUBSCRIPTION_ID + AZURE_RESOURCE_GROUP + AZURE_LOCATION + ACA_ENV_NAME");
+    }
+    if (!parsed.data.AZURE_USE_MANAGED_IDENTITY) {
+      if (!parsed.data.AZURE_TENANT_ID || !parsed.data.AZURE_CLIENT_ID || !parsed.data.AZURE_CLIENT_SECRET) {
+        throw new Error(
+          "Azure auth config missing: either set AZURE_USE_MANAGED_IDENTITY=true, or provide AZURE_TENANT_ID + AZURE_CLIENT_ID + AZURE_CLIENT_SECRET"
+        );
+      }
     }
   }
   return parsed.data;

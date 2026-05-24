@@ -10,22 +10,9 @@ import {
   listOpenIssues
 } from "../github/issues.js";
 import type { RepoRef } from "../github/types.js";
-import { createAcaClient, createManualJob, startJob } from "../azure/client.js";
-
-function envId(subscriptionId: string, resourceGroup: string, envName: string): string {
-  return `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.App/managedEnvironments/${envName}`;
-}
-
-function safeJobSuffix(): string {
-  const now = new Date();
-  const stamp =
-    now
-      .toISOString()
-      .replaceAll(/[-:]/g, "")
-      .replace(".000Z", "Z")
-      .slice(0, 16) + "Z";
-  return stamp.toLowerCase();
-}
+import { AcaJobRunner } from "../job-runner/aca.js";
+import { LocalDockerJobRunner } from "../job-runner/local-docker.js";
+import type { JobRunner } from "../job-runner/types.js";
 
 export async function runOnce(): Promise<void> {
   const cfg = getConfig();
@@ -40,6 +27,21 @@ export async function runOnce(): Promise<void> {
   log("info", "poll.found_issues", { count: issues.length });
 
   const blockedLabels = [cfg.LABEL_ACCEPTED, cfg.LABEL_IN_PROGRESS, cfg.LABEL_DONE];
+
+  const runner: JobRunner =
+    cfg.JOB_RUNNER === "aca"
+      ? new AcaJobRunner({
+          subscriptionId: cfg.AZURE_SUBSCRIPTION_ID!,
+          resourceGroup: cfg.AZURE_RESOURCE_GROUP!,
+          location: cfg.AZURE_LOCATION!,
+          environmentName: cfg.ACA_ENV_NAME!,
+          jobNamePrefix: cfg.ACA_JOB_NAME,
+          useManagedIdentity: cfg.AZURE_USE_MANAGED_IDENTITY,
+          tenantId: cfg.AZURE_TENANT_ID,
+          clientId: cfg.AZURE_CLIENT_ID,
+          clientSecret: cfg.AZURE_CLIENT_SECRET
+        })
+      : new LocalDockerJobRunner();
 
   let accepted = 0;
   for (const issue of issues) {
@@ -67,10 +69,9 @@ export async function runOnce(): Promise<void> {
       continue;
     }
 
-    const jobName = `${cfg.ACA_JOB_NAME}-issue-${issue.number}-${safeJobSuffix()}`.toLowerCase();
     const correlationId = `${issue.number}-${Date.now()}`;
 
-    log("info", "issue.accept", { issue: issueKey, issueUrl, jobName, correlationId });
+    log("info", "issue.accept", { issue: issueKey, issueUrl, runner: cfg.JOB_RUNNER, correlationId });
 
     if (!dryRun) {
       await addLabel(octokit, repo, issue.number, cfg.LABEL_ACCEPTED);
@@ -81,41 +82,27 @@ export async function runOnce(): Promise<void> {
         [
           `Accepted by autoworker.`,
           `Correlation: \`${correlationId}\``,
-          `Starting ACA Job: \`${jobName}\``,
-          `Worker image will create a PR and comment back here with the link.`
+          cfg.JOB_RUNNER === "aca"
+            ? `Runner: ACA (creating a per-issue job)`
+            : `Runner: local-docker (running the worker container locally)`,
+          `Worker image should create a PR and comment back here with the link.`
         ].join("\n")
       );
     }
 
     if (dryRun) {
-      log("info", "aca.dry_run", { jobName, issueUrl });
+      log("info", "run.dry_run", { correlationId, issueUrl });
       continue;
     }
 
-    const aca = createAcaClient({
-      subscriptionId: cfg.AZURE_SUBSCRIPTION_ID,
-      useManagedIdentity: cfg.AZURE_USE_MANAGED_IDENTITY,
-      tenantId: cfg.AZURE_TENANT_ID,
-      clientId: cfg.AZURE_CLIENT_ID,
-      clientSecret: cfg.AZURE_CLIENT_SECRET
+    const result = await runner.runIssue({
+      issueUrl,
+      githubToken: cfg.GITHUB_TOKEN,
+      anthropicApiKey: cfg.ANTHROPIC_API_KEY,
+      workerImage: cfg.WORKER_IMAGE,
+      correlationId
     });
-
-    await createManualJob(aca, {
-      resourceGroup: cfg.AZURE_RESOURCE_GROUP,
-      location: cfg.AZURE_LOCATION,
-      environmentId: envId(cfg.AZURE_SUBSCRIPTION_ID, cfg.AZURE_RESOURCE_GROUP, cfg.ACA_ENV_NAME),
-      jobName,
-      image: cfg.WORKER_IMAGE,
-      env: {
-        GH_TOKEN: cfg.GITHUB_TOKEN,
-        GITHUB_TOKEN: cfg.GITHUB_TOKEN,
-        ANTHROPIC_API_KEY: cfg.ANTHROPIC_API_KEY,
-        ISSUE_URL: issueUrl
-      }
-    });
-
-    await startJob(aca, cfg.AZURE_RESOURCE_GROUP, jobName);
-    log("info", "aca.started", { jobName, issue: issueKey });
+    log("info", "run.started", { correlationId, runner: result.runner, jobName: result.jobName, issue: issueKey });
     accepted += 1;
   }
 

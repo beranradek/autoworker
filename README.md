@@ -20,12 +20,16 @@ pnpm start
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
   - Optional: `MAX_ACCEPT_PER_RUN` (default `1`)
+  - `JOB_RUNNER`: `local-docker` (default) or `aca`
 
 ### Azure (service principal)
+
+Only required for `JOB_RUNNER=aca`:
 
 - `AZURE_SUBSCRIPTION_ID`
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_LOCATION` (e.g. `westeurope`)
+- `ACA_ENV_NAME`
 - Either:
   - Managed Identity: `AZURE_USE_MANAGED_IDENTITY=true`
   - Service principal: `AZURE_USE_MANAGED_IDENTITY=false` + `AZURE_CLIENT_ID` + `AZURE_TENANT_ID` + `AZURE_CLIENT_SECRET`
