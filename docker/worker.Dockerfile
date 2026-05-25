@@ -3,7 +3,7 @@ FROM node:22-bookworm-slim
 ARG DEBIAN_FRONTEND=noninteractive
 
 ARG GRADLE_VERSION=8.14.5
-ARG OPENCODE_VERSION=latest
+ARG OPENCODE_VERSION=1.15.10
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
