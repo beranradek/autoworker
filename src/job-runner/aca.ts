@@ -22,8 +22,14 @@ export class AcaJobRunner implements JobRunner {
   constructor(private readonly cfg: AcaRunnerConfig) {}
 
   async runIssue(input: IssueRunInput): Promise<IssueRunResult> {
-    const safeSuffix = input.correlationId.replaceAll(/[^a-z0-9-]/gi, "-").toLowerCase().slice(0, 48);
-    const jobName = `${this.cfg.jobNamePrefix}-issue-${safeSuffix}`.toLowerCase();
+    const prefix = `${this.cfg.jobNamePrefix}-`;
+    const maxSuffixLen = 32 - prefix.length;
+    const safeSuffix = input.correlationId
+      .replaceAll(/[^a-z0-9-]/gi, "-")
+      .toLowerCase()
+      .slice(0, maxSuffixLen)
+      .replace(/-+$/, "");
+    const jobName = `${prefix}${safeSuffix}`;
 
     log("info", "aca.create_and_start", { jobName, correlationId: input.correlationId });
 
