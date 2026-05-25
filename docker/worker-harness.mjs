@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -208,9 +209,10 @@ async function main() {
   if (issueText && !issueBody) issueBody = issueText;
 
   const branchSlug = sanitizeBranchPart(issueTitle || "issue");
-  const branchName = `issue-${issueNum || "manual"}-${branchSlug || "work"}`;
+  const runHash = randomBytes(3).toString("hex");
+  const branchName = `issue-${issueNum || "manual"}-${branchSlug || "work"}-${runHash}`;
 
-  // Create or reset the work branch deterministically.
+  // Create a fresh local work branch for this run.
   const checkoutRes = await runWithRetry("git", ["checkout", "-B", branchName], { cwd: repoDir, env: gitEnv });
   if (checkoutRes.exitCode !== 0) die("Failed to create/reset branch", { branchName, exitCode: checkoutRes.exitCode });
 
@@ -439,11 +441,27 @@ async function main() {
 
   // Push without persisting token to git config (avoid storing token in .git/config).
   const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
-  const pushRes = await runWithRetry(
-    "git",
-    ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, "push", "-u", "origin", branchName],
-    { cwd: repoDir, env: gitEnv }
-  );
+  const gitWithAuth = (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
+
+  let pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", branchName]), { cwd: repoDir, env: gitEnv });
+  if (pushRes.exitCode !== 0) {
+    const pushOut = pushRes.stdout + pushRes.stderr;
+    const isNonFastForward = pushOut.includes("non-fast-forward") || pushOut.includes("[rejected]");
+    if (isNonFastForward) {
+      log("warn", "push.non_fast_forward", { branchName });
+      const fetchRes = await runWithRetry("git", gitWithAuth(["fetch", "origin", branchName]), { cwd: repoDir, env: gitEnv });
+      if (fetchRes.exitCode !== 0) {
+        log("warn", "push.non_fast_forward.fetch_failed", { branchName });
+      } else {
+        const rebaseRes = await runWithRetry("git", ["rebase", `origin/${branchName}`], { cwd: repoDir, env: gitEnv });
+        if (rebaseRes.exitCode !== 0) {
+          log("warn", "push.non_fast_forward.rebase_failed", { branchName });
+        } else {
+          pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", branchName]), { cwd: repoDir, env: gitEnv });
+        }
+      }
+    }
+  }
   if (pushRes.exitCode !== 0) die("git push failed", { exitCode: pushRes.exitCode });
 
   // Create PR deterministically.
