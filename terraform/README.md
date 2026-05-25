@@ -75,6 +75,11 @@ az acr build --registry autoworkeracr --image autoworker-worker:latest -f docker
 The poller job references `autoworkeracr.azurecr.io/autoworker-server:latest` and sets
 `WORKER_IMAGE=autoworkeracr.azurecr.io/autoworker-worker:latest` for per-issue jobs automatically.
 
+IMPORTANT:
+
+terraform apply will validate secrets in key vault and container images already exist so create the secrets and images
+and then run `terraform apply` again. 
+
 ### 4. Trigger or wait for the poller
 
 The poller runs every 2 minutes by default. To trigger manually:
