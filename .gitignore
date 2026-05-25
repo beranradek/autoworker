@@ -13,3 +13,4 @@ terraform/.terraform.lock.hcl
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/plan.out
+terraform/*.tfvars
