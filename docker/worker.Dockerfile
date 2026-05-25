@@ -2,8 +2,6 @@ FROM node:22-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Versions can be overridden at build time
-ARG JAVA_VERSION=25
 ARG GRADLE_VERSION=8.14.5
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
@@ -39,27 +37,17 @@ RUN mkdir -p /etc/apt/keyrings \
   && apt-get install -y --no-install-recommends gh \
   && rm -rf /var/lib/apt/lists/*
 
-# Eclipse Temurin JDK (Adoptium) via Adoptium API tarball (multi-arch)
-ARG TARGETARCH
-RUN case "${TARGETARCH}" in \
-      amd64) ADOPTIUM_ARCH="x64" ;; \
-      arm64) ADOPTIUM_ARCH="aarch64" ;; \
-      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-  && mkdir -p /opt/java \
-  && curl -fsSL "https://api.adoptium.net/v3/binary/latest/${JAVA_VERSION}/ga/linux/${ADOPTIUM_ARCH}/jdk/hotspot/normal/eclipse" \
-    -o /tmp/temurin.tgz \
-  && tar -xzf /tmp/temurin.tgz -C /opt/java \
-  && rm -f /tmp/temurin.tgz \
-  && JAVA_DIR="$(ls -1d /opt/java/jdk-* | head -n 1)" \
-  && mv "${JAVA_DIR}" "/opt/java/temurin-${JAVA_VERSION}" \
-  && ln -s "/opt/java/temurin-${JAVA_VERSION}" /opt/java/current
+# Temurin 21 JDK via Adoptium apt repo (reliable; avoids the binary API download)
+RUN wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public \
+    | gpg --dearmor > /etc/apt/trusted.gpg.d/adoptium.gpg \
+  && echo "deb https://packages.adoptium.net/artifactory/deb bookworm main" \
+    > /etc/apt/sources.list.d/adoptium.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends temurin-21-jdk \
+  && rm -rf /var/lib/apt/lists/*
 
-ENV JAVA_HOME=/opt/java/current
+ENV JAVA_HOME=/usr/lib/jvm/temurin-21
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-RUN ln -sf "${JAVA_HOME}/bin/java" /usr/local/bin/java \
-  && ln -sf "${JAVA_HOME}/bin/javac" /usr/local/bin/javac
 
 # Gradle binary distribution (avoid stale distro packages)
 RUN mkdir -p /opt/gradle \
@@ -73,8 +61,9 @@ RUN npm install -g pnpm typescript opencode-ai \
   && npm cache clean --force
 
 RUN mkdir -p /usr/local/lib/autoworker
-COPY --chmod=755 docker/worker-harness.mjs /usr/local/lib/autoworker/worker-harness.mjs
-COPY --chmod=755 docker/worker-run-issue.sh /usr/local/bin/autoworker-issue
+COPY docker/worker-harness.mjs /usr/local/lib/autoworker/worker-harness.mjs
+COPY docker/worker-run-issue.sh /usr/local/bin/autoworker-issue
+RUN chmod 755 /usr/local/lib/autoworker/worker-harness.mjs /usr/local/bin/autoworker-issue
 
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node \
   && chmod 0440 /etc/sudoers.d/node
