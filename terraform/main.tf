@@ -203,6 +203,10 @@ resource "azurerm_container_app_job" "poller" {
         name  = "AZURE_USE_MANAGED_IDENTITY"
         value = "true"
       }
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.autoworker.client_id
+      }
     }
   }
 
