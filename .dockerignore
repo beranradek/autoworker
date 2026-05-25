@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.git/
+terraform/
+docs/
+test/
+.env
+.env.local
+.DS_Store
+.idea/

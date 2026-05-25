@@ -1,8 +1,9 @@
-FROM node:22-bookworm
+FROM node:22-bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 ARG GRADLE_VERSION=8.14.5
+ARG OPENCODE_VERSION=latest
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
@@ -56,8 +57,8 @@ RUN mkdir -p /opt/gradle \
   && rm -f /tmp/gradle.zip \
   && ln -s "/opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle
 
-# OpenCode CLI (install methods documented at https://opencode.ai/download)
-RUN npm install -g pnpm typescript opencode-ai \
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate \
+  && npm install -g typescript@6.0.3 opencode-ai@${OPENCODE_VERSION} \
   && npm cache clean --force
 
 RUN mkdir -p /usr/local/lib/autoworker
@@ -70,7 +71,7 @@ RUN echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node \
 
 ENV CHROME_BIN=/usr/bin/chromium
 WORKDIR /workspace
-RUN mkdir -p /workspace && chown -R node:node /workspace
+RUN chown -R node:node /workspace
 
 USER node
 ENTRYPOINT ["/usr/local/bin/autoworker-issue"]
