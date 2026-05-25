@@ -1,79 +1,92 @@
-# Terraform (PoC)
+# Terraform
 
-This module provisions Azure Container Apps Environment + a scheduled Container Apps Job to run `autoworker` periodically.
+Provisions all Azure infrastructure for Autoworker:
 
-It is intentionally minimal; adapt to your subscription/resource group conventions and security baseline.
+- Log Analytics Workspace
+- Azure Container Registry (`autoworkeracr` — alphanumeric only, globally unique)
+- Container Apps Environment
+- User-assigned Managed Identity (Contributor on RG, AcrPull on ACR, Secrets User on Key Vault)
+- Key Vault (secrets are set manually, never stored in tfstate)
+- Container Apps Job (scheduled poller running `autoworker-server`)
 
-## Prereqs
+## Prerequisites
 
 - Terraform `>= 1.6`
 - AzureRM provider `>= 4.70.0`
-- Existing Resource Group (set via `resource_group_name`)
-- `autoworker` container image published somewhere reachable by Azure Container Apps (GHCR/ACR/...)
+- Pre-existing Resource Group
+- Azure CLI authenticated (`az login`)
 
-## Inputs
+## Required inputs
 
-Required:
+| Variable | Description |
+|----------|-------------|
+| `subscription_id` | Azure subscription ID |
+| `resource_group_name` | Pre-existing resource group name |
+| `location` | Azure region (e.g. `germanywestcentral`) |
+| `github_repos` | Repos to poll, e.g. `myorg/myrepo` |
 
-- `subscription_id` – target Azure subscription id
-- `resource_group_name` – existing RG name to deploy into
-- `location` – Azure region (e.g. `westeurope`)
-- `autoworker_image` – image for the poller (this repo)
-- `worker_image` – worker image that will create PRs for accepted issues
-- `github_repos` – repos to poll (comma/whitespace-separated `owner/repo` list; can be a single entry)
-- `github_token` – PAT/token with access to read/write issues in the repo
-- `openai_api_key` – passed through to the worker container as `OPENAI_API_KEY`
+All other variables have sensible defaults (see `variables.tf`).
 
-Optional:
+## Secrets — never in Terraform
 
-  - `name_prefix` (default `autoworker`) – names all created resources
-- `worker_job_name_prefix` (default `issue-agent`) – per-issue job name prefix (autoworker will create one job per accepted issue)
-  - `poll_cron` (default `*/2 * * * *`) – how often the scheduled poller runs
-  - `llm_model` (default `openai/gpt-5-mini`) – passed through to the worker container as `LLM_MODEL`
-
-## Usage (example)
-
-From `dev/autoworker/terraform/`:
+`GITHUB_TOKEN` and `OPENAI_API_KEY` are stored in Key Vault and never touch Terraform variables or `tfstate`. Set them after the first apply:
 
 ```bash
+az keyvault secret set --vault-name autoworker-kv --name github-token  --value "ghp_..."
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."
+```
+
+## Usage
+
+### 1. Init and apply (creates all infra including ACR and Key Vault)
+
+```bash
+cd terraform
 terraform init
 
-export TF_VAR_subscription_id="00000000-0000-0000-0000-000000000000"
-export TF_VAR_resource_group_name="rg-autoworker"
-export TF_VAR_location="westeurope"
+export TF_VAR_subscription_id="<subscription-id>"
+export TF_VAR_resource_group_name="autoworker-rg"
+export TF_VAR_location="germanywestcentral"
+export TF_VAR_github_repos="myorg/myrepo"
 
-export TF_VAR_autoworker_image="ghcr.io/beranradek/autoworker:latest"
-export TF_VAR_worker_image="ghcr.io/beranradek/autoworker:latest"
-
-export TF_VAR_github_repos="beranradek/some-repo"
-
-# Secrets (PoC): do NOT commit these; prefer Key Vault for real usage.
-export TF_VAR_github_token="ghp_..."
-export TF_VAR_openai_api_key="sk-..."
-
-terraform plan
 terraform apply
 ```
 
-To change schedule/model later:
+### 2. Set secrets in Key Vault (shown in terraform output `secret_setup_commands`)
+
+```bash
+az keyvault secret set --vault-name autoworker-kv --name github-token  --value "ghp_..."
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."
+```
+
+### 3. Build and push images to ACR
+
+```bash
+# From the repo root:
+az acr build --registry autoworkeracr --image autoworker-server:latest -f docker/Dockerfile .
+az acr build --registry autoworkeracr --image autoworker-worker:latest -f docker/worker.Dockerfile .
+```
+
+> `az acr build` runs the build in the Azure cloud — no local Docker required.
+
+The poller job references `autoworkeracr.azurecr.io/autoworker-server:latest` and sets
+`WORKER_IMAGE=autoworkeracr.azurecr.io/autoworker-worker:latest` for per-issue jobs automatically.
+
+### 4. Trigger or wait for the poller
+
+The poller runs every 2 minutes by default. To trigger manually:
+
+```bash
+az containerapp job start --name autoworker-poller --resource-group autoworker-rg
+```
+
+## Changing schedule or model
 
 ```bash
 export TF_VAR_poll_cron="*/5 * * * *"
-export TF_VAR_llm_model="openai/gpt-5-mini"
+export TF_VAR_llm_model="openai/gpt-4o-mini"
 terraform apply
 ```
-
-## What it creates
-
-- Log Analytics Workspace
-- Container Apps Environment
-- User-assigned managed identity (PoC: gets Contributor on the RG)
-- Container Apps Job (scheduled) that runs the `autoworker` poller
-
-## Notes / security
-
-- Secrets are injected as environment variables from Terraform variables (PoC). For anything beyond a PoC, prefer Key Vault + managed identity and avoid `terraform.tfstate` containing secrets.
-- The identity gets RG-level Contributor for simplicity so `autoworker` can create/start per-issue jobs. Tighten permissions for real usage.
 
 ## Cleanup
 

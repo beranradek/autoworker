@@ -37,7 +37,7 @@ Background helper (PID + logs in `.run/`):
 ## Worker image (OpenCode)
 
 ```bash
-DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker:local -f docker/worker.Dockerfile .
+DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-worker:local -f docker/worker.Dockerfile .
 ```
 
 ## Env vars
@@ -50,7 +50,7 @@ Minimum (local):
 
 When `DRY_RUN=false`:
 
-- `WORKER_IMAGE` (e.g. `autoworker:local`)
+- `WORKER_IMAGE` (e.g. `autoworker-worker:local`)
 - `OPENAI_API_KEY`
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
 
@@ -69,3 +69,15 @@ Azure runner (`JOB_RUNNER=aca`) additionally requires:
 ## Azure setup (Terraform)
 
 See `terraform/README.md`.
+
+Minimum variables needed (everything else has defaults):
+
+```bash
+export TF_VAR_subscription_id="<your-subscription-id>"
+export TF_VAR_resource_group_name="autoworker-rg"
+export TF_VAR_location="germanywestcentral"
+export TF_VAR_github_repos="myorg/myrepo"
+terraform apply
+```
+
+Secrets (`GITHUB_TOKEN`, `OPENAI_API_KEY`) are set directly in Key Vault after apply — never in Terraform vars or tfstate.

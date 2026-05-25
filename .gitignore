@@ -4,6 +4,7 @@ dist.old.*
 .env
 .env.local
 .DS_Store
+.idea
 
 /.run
 
