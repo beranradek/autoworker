@@ -110,6 +110,9 @@ export TF_VAR_resource_group_name="autoworker-rg"
 export TF_VAR_location="<region-code>"
 export TF_VAR_github_repos="myorg/myrepo"
 
+# Select correct Azure subscription:
+az account set --subscription <subscription-id>
+
 terraform apply
 ```
 
@@ -124,7 +127,7 @@ az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value 
 
 ```bash
 # From repo root:
-az acr build --registry autoworkeracr --image autoworker-server:latest -f docker/Dockerfile .
+az acr build --registry autoworkeracr --imageautoworker-server:latest -f docker/Dockerfile .
 az acr build --registry autoworkeracr --image autoworker-worker:latest -f docker/worker.Dockerfile .
 ```
 

@@ -49,6 +49,9 @@ export TF_VAR_resource_group_name="autoworker-rg"
 export TF_VAR_location="germanywestcentral"
 export TF_VAR_github_repos="myorg/myrepo"
 
+# Select correct Azure subscription:
+az account set --subscription <subscription-id>
+
 terraform apply
 ```
 
