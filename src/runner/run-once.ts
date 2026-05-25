@@ -60,7 +60,13 @@ export async function runOnce(): Promise<void> {
     if (accepted >= cfg.MAX_ACCEPT_PER_RUN) break;
 
     log("info", "poll.repo_start", { repo: `${repo.owner}/${repo.repo}` });
-    const issues = await listOpenIssues(octokit, repo);
+    let issues;
+    try {
+      issues = await listOpenIssues(octokit, repo);
+    } catch (err) {
+      log("warn", "poll.repo_error", { repo: `${repo.owner}/${repo.repo}`, error: String(err) });
+      continue;
+    }
     log("info", "poll.found_issues", { repo: `${repo.owner}/${repo.repo}`, count: issues.length });
 
     for (const issue of issues) {

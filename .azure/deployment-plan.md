@@ -137,6 +137,7 @@ az acr build --registry autoworkeracr --image autoworker-worker:latest -f docker
 # Check poller job logs (runs every 2 min, or trigger manually):
 az containerapp job start --name autoworker-poller --resource-group autoworker-rg
 az containerapp job execution list --name autoworker-poller --resource-group autoworker-rg
+az containerapp job execution list --name autoworker-poller --resource-group autoworker-rg --output table
 ```
 
 ---

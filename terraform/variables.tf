@@ -44,6 +44,6 @@ variable "llm_model" {
 
 variable "poll_cron" {
   type        = string
-  default     = "*/2 * * * *"
-  description = "Cron schedule for the poller job (default: every 2 minutes)."
+  default     = "*/2 5-19 * * 1-5"
+  description = "Cron schedule for the poller job (default: every 2 minutes, Mon-Fri 05:00-19:59 UTC)."
 }

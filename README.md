@@ -70,6 +70,9 @@ Azure runner (`JOB_RUNNER=aca`) additionally requires:
 
 See `terraform/README.md`.
 
+Both polling server and workers run as Azure Container Apps Jobs.
+Poller runs based on cron expression schedule set in Terraform..
+
 Minimum variables needed (everything else has defaults):
 
 ```bash
@@ -81,3 +84,24 @@ terraform apply
 ```
 
 Secrets (`GITHUB_TOKEN`, `OPENAI_API_KEY`) are set directly in Key Vault after apply — never in Terraform vars or tfstate.
+
+### Useful Azure commands
+
+Runs of main poller application and their states:
+
+`az containerapp job execution list --name autoworker-poller --resource-group autoworker-rg --output table`
+
+Logs of concrete run:
+
+`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --execution <execution-name> --container autoworker-server --tail 50`
+
+Logs from all runs:
+
+`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --tail 200`
+
+Manual execution of poller job:
+
+`az containerapp job start --name autoworker-poller --resource-group autoworker-rg`
+
+To update the env var on the job:
+`az containerapp job update --name autoworker-poller --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=beranradek/autoworker"`
