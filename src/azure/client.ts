@@ -22,6 +22,7 @@ export type CreateJobInput = {
   environmentId: string;
   jobName: string;
   image: string;
+  uamiId?: string;
   env: Record<string, string>;
 };
 
@@ -41,14 +42,25 @@ export async function createManualJob(client: ContainerAppsAPIClient, input: Cre
     }
   }
 
+  const acrServer = input.image.split("/")[0];
+
   const job: Job = {
     location: input.location,
     environmentId: input.environmentId,
+    ...(input.uamiId && {
+      identity: {
+        type: "UserAssigned",
+        userAssignedIdentities: { [input.uamiId]: {} }
+      }
+    }),
     configuration: {
       triggerType: "Manual",
       replicaTimeout: 7200,
       replicaRetryLimit: 0,
-      secrets
+      secrets,
+      ...(input.uamiId && {
+        registries: [{ server: acrServer, identity: input.uamiId }]
+      })
     },
     template: {
       containers: [

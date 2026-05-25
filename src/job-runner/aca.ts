@@ -9,6 +9,7 @@ export type AcaRunnerConfig = {
   environmentName: string;
   jobNamePrefix: string;
   useManagedIdentity: boolean;
+  uamiId?: string;
   tenantId?: string;
   clientId?: string;
   clientSecret?: string;
@@ -47,6 +48,7 @@ export class AcaJobRunner implements JobRunner {
       environmentId: envId(this.cfg.subscriptionId, this.cfg.resourceGroup, this.cfg.environmentName),
       jobName,
       image: input.workerImage,
+      uamiId: this.cfg.uamiId,
       env: {
         GH_TOKEN: input.githubToken,
         GITHUB_TOKEN: input.githubToken,

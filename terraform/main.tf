@@ -207,6 +207,10 @@ resource "azurerm_container_app_job" "poller" {
         name  = "AZURE_CLIENT_ID"
         value = azurerm_user_assigned_identity.autoworker.client_id
       }
+      env {
+        name  = "AZURE_UAMI_ID"
+        value = azurerm_user_assigned_identity.autoworker.id
+      }
     }
   }
 

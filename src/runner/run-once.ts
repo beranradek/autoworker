@@ -41,6 +41,7 @@ export async function runOnce(): Promise<void> {
           environmentName: cfg.ACA_ENV_NAME!,
           jobNamePrefix: cfg.ACA_JOB_NAME,
           useManagedIdentity: cfg.AZURE_USE_MANAGED_IDENTITY,
+          uamiId: cfg.AZURE_UAMI_ID,
           tenantId: cfg.AZURE_TENANT_ID,
           clientId: cfg.AZURE_CLIENT_ID,
           clientSecret: cfg.AZURE_CLIENT_SECRET
