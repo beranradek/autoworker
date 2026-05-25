@@ -43,25 +43,23 @@ export async function createManualJob(client: ContainerAppsAPIClient, input: Cre
 
   const job: Job = {
     location: input.location,
-    properties: {
-      environmentId: input.environmentId,
-      configuration: {
-        triggerType: "Manual",
-        replicaTimeout: 7200,
-        replicaRetryLimit: 0,
-        secrets
-      },
-      template: {
-        containers: [
-          {
-            name: "worker",
-            image: input.image,
-            env: envVars
-          }
-        ]
-      }
-    } as any
-  } as any;
+    environmentId: input.environmentId,
+    configuration: {
+      triggerType: "Manual",
+      replicaTimeout: 7200,
+      replicaRetryLimit: 0,
+      secrets
+    },
+    template: {
+      containers: [
+        {
+          name: "worker",
+          image: input.image,
+          env: envVars
+        }
+      ]
+    }
+  };
 
   await client.jobs.beginCreateOrUpdateAndWait(input.resourceGroup, input.jobName, job);
 }

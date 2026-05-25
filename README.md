@@ -87,7 +87,9 @@ Secrets (`GITHUB_TOKEN`, `OPENAI_API_KEY`) are set directly in Key Vault after a
 
 ### Useful Azure commands
 
-Runs of main poller application and their states:
+#### Main poller app
+
+Runs and their states:
 
 `az containerapp job execution list --name autoworker-poller --resource-group autoworker-rg --output table`
 
@@ -98,10 +100,27 @@ Logs of concrete run:
 Logs from all runs:
 
 `az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --tail 200`
+`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --follow`
 
-Manual execution of poller job:
+Manual execution of one poll run:
 
 `az containerapp job start --name autoworker-poller --resource-group autoworker-rg`
 
 To update the env var on the job:
 `az containerapp job update --name autoworker-poller --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=beranradek/autoworker"`
+
+#### Worker Azure Container Apps Job (per issue)
+
+The worker is not a static Container App — it's dynamically created as an ACA Job per issue with the prefix issue-agent.
+
+List recent worker job executions:
+
+`az containerapp job list --resource-group autoworker-rg --query "[?starts_with(name, 'issue-agent')].{name:name, created:systemData.createdAt}" -o table`
+
+View logs for a specific worker job:
+
+`az containerapp job logs show --name <issue-agent-XXXXX> --resource-group autoworker-rg --tail 200`
+
+For real-time streaming, use Log Analytics (if configured):
+
+`az monitor log-analytics query --workspace <workspace-id> --analytics-query "ContainerAppConsoleLogs_CL | where ContainerName_s startswith 'issue-agent' | order by TimeGenerated desc | limit 100" --resource-group autoworker-rg --tail 200`
