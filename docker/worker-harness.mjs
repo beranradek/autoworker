@@ -25,6 +25,7 @@ function redact(str) {
   return str
     .replaceAll(/\b(ghp_[A-Za-z0-9]{20,})\b/g, "***")
     .replaceAll(/\b(github_pat_[A-Za-z0-9_]{20,})\b/g, "***")
+    .replaceAll(/(sk-ant-[A-Za-z0-9-]{20,})/g, "***")
     .replaceAll(/\b(sk-[A-Za-z0-9]{20,})\b/g, "***");
 }
 
@@ -117,9 +118,17 @@ async function runWithRetry(cmd, args, opts) {
 async function main() {
   const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+  const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY || "";
+  const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT || "";
   const LLM_MODEL = process.env.LLM_MODEL || "openai/gpt-5-mini";
 
-  if (!OPENAI_API_KEY) die("OPENAI_API_KEY is required");
+  if (!OPENAI_API_KEY && !ANTHROPIC_API_KEY && !AZURE_OPENAI_API_KEY) {
+    die("One of OPENAI_API_KEY, ANTHROPIC_API_KEY, or AZURE_OPENAI_API_KEY is required");
+  }
+  if (AZURE_OPENAI_API_KEY && !AZURE_OPENAI_ENDPOINT) {
+    die("AZURE_OPENAI_ENDPOINT is required when AZURE_OPENAI_API_KEY is set");
+  }
 
   const WORKDIR = process.env.WORKDIR || "/workspace";
   const CLONE_DIR = process.env.CLONE_DIR || path.join(WORKDIR, "repo");
@@ -266,7 +275,10 @@ async function main() {
     TMPDIR: process.env.TMPDIR,
     CI: process.env.CI,
     CHROME_BIN: process.env.CHROME_BIN,
-    OPENAI_API_KEY,
+    OPENAI_API_KEY: OPENAI_API_KEY || undefined,
+    ANTHROPIC_API_KEY: ANTHROPIC_API_KEY || undefined,
+    AZURE_OPENAI_API_KEY: AZURE_OPENAI_API_KEY || undefined,
+    AZURE_OPENAI_ENDPOINT: AZURE_OPENAI_ENDPOINT || undefined,
     LLM_MODEL
   };
 

@@ -39,7 +39,13 @@ variable "worker_job_name_prefix" {
 variable "llm_model" {
   type        = string
   default     = "openai/gpt-5-mini"
-  description = "LLM model passed to the worker container."
+  description = "LLM model passed to the worker container (e.g. openai/gpt-5-mini, anthropic/claude-..., azure/<deployment>)."
+}
+
+variable "azure_openai_endpoint" {
+  type        = string
+  default     = ""
+  description = "Azure OpenAI endpoint URL (e.g. https://my-resource.openai.azure.com). Set when using an azure/<deployment> model."
 }
 
 variable "poll_cron" {

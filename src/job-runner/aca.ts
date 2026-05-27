@@ -52,7 +52,10 @@ export class AcaJobRunner implements JobRunner {
       env: {
         GH_TOKEN: input.githubToken,
         GITHUB_TOKEN: input.githubToken,
-        OPENAI_API_KEY: input.openaiApiKey,
+        ...(input.openaiApiKey ? { OPENAI_API_KEY: input.openaiApiKey } : {}),
+        ...(input.anthropicApiKey ? { ANTHROPIC_API_KEY: input.anthropicApiKey } : {}),
+        ...(input.azureOpenaiApiKey ? { AZURE_OPENAI_API_KEY: input.azureOpenaiApiKey } : {}),
+        ...(input.azureOpenaiEndpoint ? { AZURE_OPENAI_ENDPOINT: input.azureOpenaiEndpoint } : {}),
         LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
         ISSUE_URL: input.issueUrl
       }

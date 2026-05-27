@@ -20,6 +20,22 @@ provider "azurerm" {
 
 data "azurerm_client_config" "current" {}
 
+# Derive the active LLM provider from the model string prefix so we only wire
+# the Key Vault secret + env vars that the chosen provider actually needs.
+locals {
+  llm_provider = split("/", var.llm_model)[0]
+  llm_secret_name = (
+    local.llm_provider == "anthropic" ? "anthropic-api-key" :
+    local.llm_provider == "azure" ? "azure-openai-api-key" :
+    "openai-api-key"
+  )
+  llm_env_name = (
+    local.llm_provider == "anthropic" ? "ANTHROPIC_API_KEY" :
+    local.llm_provider == "azure" ? "AZURE_OPENAI_API_KEY" :
+    "OPENAI_API_KEY"
+  )
+}
+
 # ---------------------------------------------------------------------------
 # Observability
 # ---------------------------------------------------------------------------
@@ -138,8 +154,8 @@ resource "azurerm_container_app_job" "poller" {
   }
 
   secret {
-    name                = "openai-api-key"
-    key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/openai-api-key"
+    name                = local.llm_secret_name
+    key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/${local.llm_secret_name}"
     identity            = azurerm_user_assigned_identity.autoworker.id
   }
 
@@ -170,8 +186,15 @@ resource "azurerm_container_app_job" "poller" {
         value = "${azurerm_container_registry.acr.login_server}/autoworker-worker:latest"
       }
       env {
-        name        = "OPENAI_API_KEY"
-        secret_name = "openai-api-key"
+        name        = local.llm_env_name
+        secret_name = local.llm_secret_name
+      }
+      dynamic "env" {
+        for_each = local.llm_provider == "azure" ? [1] : []
+        content {
+          name  = "AZURE_OPENAI_ENDPOINT"
+          value = var.azure_openai_endpoint
+        }
       }
       env {
         name  = "LLM_MODEL"
@@ -250,10 +273,14 @@ output "poller_job_name" {
 
 output "secret_setup_commands" {
   value       = <<-EOT
-    After applying, set the two secrets in Key Vault (never committed to disk):
+    After applying, set the secrets in Key Vault (never committed to disk):
 
-      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-token  --value "YOUR_GITHUB_PAT"
-      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name openai-api-key --value "YOUR_OPENAI_KEY"
+      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-token --value "YOUR_GITHUB_PAT"
+
+    Provider key for the selected model (${var.llm_model}):
+      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name ${local.llm_secret_name} --value "YOUR_PROVIDER_KEY"
+
+    (For azure/<deployment> models also set azure_openai_endpoint in terraform.tfvars.)
 
     Then build and push the images:
 
