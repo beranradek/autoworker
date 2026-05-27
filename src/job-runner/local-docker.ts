@@ -18,8 +18,8 @@ export class LocalDockerJobRunner implements JobRunner {
     ];
     if (input.openaiApiKey) args.push("-e", `OPENAI_API_KEY=${input.openaiApiKey}`);
     if (input.anthropicApiKey) args.push("-e", `ANTHROPIC_API_KEY=${input.anthropicApiKey}`);
-    if (input.azureOpenaiApiKey) args.push("-e", `AZURE_OPENAI_API_KEY=${input.azureOpenaiApiKey}`);
-    if (input.azureOpenaiEndpoint) args.push("-e", `AZURE_OPENAI_ENDPOINT=${input.azureOpenaiEndpoint}`);
+    if (input.azureApiKey) args.push("-e", `AZURE_API_KEY=${input.azureApiKey}`);
+    if (input.azureResourceName) args.push("-e", `AZURE_RESOURCE_NAME=${input.azureResourceName}`);
     args.push(
       "-e",
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,

@@ -26,12 +26,12 @@ locals {
   llm_provider = split("/", var.llm_model)[0]
   llm_secret_name = (
     local.llm_provider == "anthropic" ? "anthropic-api-key" :
-    local.llm_provider == "azure" ? "azure-openai-api-key" :
+    local.llm_provider == "azure" ? "azure-api-key" :
     "openai-api-key"
   )
   llm_env_name = (
     local.llm_provider == "anthropic" ? "ANTHROPIC_API_KEY" :
-    local.llm_provider == "azure" ? "AZURE_OPENAI_API_KEY" :
+    local.llm_provider == "azure" ? "AZURE_API_KEY" :
     "OPENAI_API_KEY"
   )
 }
@@ -192,8 +192,8 @@ resource "azurerm_container_app_job" "poller" {
       dynamic "env" {
         for_each = local.llm_provider == "azure" ? [1] : []
         content {
-          name  = "AZURE_OPENAI_ENDPOINT"
-          value = var.azure_openai_endpoint
+          name  = "AZURE_RESOURCE_NAME"
+          value = var.azure_resource_name
         }
       }
       env {
@@ -280,7 +280,7 @@ output "secret_setup_commands" {
     Provider key for the selected model (${var.llm_model}):
       az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name ${local.llm_secret_name} --value "YOUR_PROVIDER_KEY"
 
-    (For azure/<deployment> models also set azure_openai_endpoint in terraform.tfvars.)
+    (For azure/<deployment> models also set azure_resource_name in terraform.tfvars.)
 
     Then build and push the images:
 

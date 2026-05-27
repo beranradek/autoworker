@@ -3,8 +3,8 @@ export type IssueRunInput = {
   githubToken: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
-  azureOpenaiApiKey?: string;
-  azureOpenaiEndpoint?: string;
+  azureApiKey?: string;
+  azureResourceName?: string;
   workerImage: string;
   correlationId: string;
   llmModel?: string;

@@ -39,8 +39,10 @@ const schema = z.object({
   WORKER_IMAGE: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
-  AZURE_OPENAI_API_KEY: z.string().optional(),
-  AZURE_OPENAI_ENDPOINT: z.string().url().optional(),
+  // Azure OpenAI via OpenCode: it reads AZURE_API_KEY + AZURE_RESOURCE_NAME
+  // (the *.openai.azure.com subdomain), not the full endpoint URL.
+  AZURE_API_KEY: z.string().optional(),
+  AZURE_RESOURCE_NAME: z.string().optional(),
   LLM_MODEL: z.string().default("openai/gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
@@ -55,8 +57,8 @@ export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & {
   GITHUB_TOKEN: string;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
-  AZURE_OPENAI_API_KEY?: string;
-  AZURE_OPENAI_ENDPOINT?: string;
+  AZURE_API_KEY?: string;
+  AZURE_RESOURCE_NAME?: string;
 };
 
 export function getConfig(): Config {
@@ -88,10 +90,10 @@ export function getConfig(): Config {
     }
     const hasOpenAiKey = Boolean(parsed.data.OPENAI_API_KEY);
     const hasAnthropicKey = Boolean(parsed.data.ANTHROPIC_API_KEY);
-    const hasAzureKey = Boolean(parsed.data.AZURE_OPENAI_API_KEY && parsed.data.AZURE_OPENAI_ENDPOINT);
+    const hasAzureKey = Boolean(parsed.data.AZURE_API_KEY && parsed.data.AZURE_RESOURCE_NAME);
     if (!hasOpenAiKey && !hasAnthropicKey && !hasAzureKey) {
       throw new Error(
-        "Worker config missing: provide OPENAI_API_KEY, ANTHROPIC_API_KEY, or both AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT (or set DRY_RUN=true for claim-only mode)"
+        "Worker config missing: provide OPENAI_API_KEY, ANTHROPIC_API_KEY, or both AZURE_API_KEY + AZURE_RESOURCE_NAME (or set DRY_RUN=true for claim-only mode)"
       );
     }
   }

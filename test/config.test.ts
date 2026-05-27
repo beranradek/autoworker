@@ -74,21 +74,21 @@ describe("getConfig", () => {
     );
   });
 
-  it("accepts AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT in non-dry-run mode", () => {
+  it("accepts AZURE_API_KEY + AZURE_RESOURCE_NAME in non-dry-run mode", () => {
     withEnv(
       {
         GITHUB_TOKEN: "x",
         GITHUB_REPOS: "o/r",
         JOB_RUNNER: "local-docker",
         WORKER_IMAGE: "img",
-        AZURE_OPENAI_API_KEY: "az-key",
-        AZURE_OPENAI_ENDPOINT: "https://my-resource.openai.azure.com",
+        AZURE_API_KEY: "az-key",
+        AZURE_RESOURCE_NAME: "my-resource",
         LLM_MODEL: "azure/gpt-4o-prod"
       },
       () => {
         const cfg = getConfig();
-        expect(cfg.AZURE_OPENAI_API_KEY).toBe("az-key");
-        expect(cfg.AZURE_OPENAI_ENDPOINT).toBe("https://my-resource.openai.azure.com");
+        expect(cfg.AZURE_API_KEY).toBe("az-key");
+        expect(cfg.AZURE_RESOURCE_NAME).toBe("my-resource");
       }
     );
   });
@@ -107,14 +107,14 @@ describe("getConfig", () => {
     );
   });
 
-  it("throws when AZURE_OPENAI_API_KEY is set without AZURE_OPENAI_ENDPOINT", () => {
+  it("throws when AZURE_API_KEY is set without AZURE_RESOURCE_NAME", () => {
     withEnv(
       {
         GITHUB_TOKEN: "x",
         GITHUB_REPOS: "o/r",
         JOB_RUNNER: "local-docker",
         WORKER_IMAGE: "img",
-        AZURE_OPENAI_API_KEY: "az-key"
+        AZURE_API_KEY: "az-key"
       },
       () => {
         expect(() => getConfig()).toThrow();

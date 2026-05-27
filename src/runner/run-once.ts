@@ -127,8 +127,8 @@ export async function runOnce(): Promise<void> {
           githubToken: cfg.GITHUB_TOKEN,
           openaiApiKey: cfg.OPENAI_API_KEY,
           anthropicApiKey: cfg.ANTHROPIC_API_KEY,
-          azureOpenaiApiKey: cfg.AZURE_OPENAI_API_KEY,
-          azureOpenaiEndpoint: cfg.AZURE_OPENAI_ENDPOINT,
+          azureApiKey: cfg.AZURE_API_KEY,
+          azureResourceName: cfg.AZURE_RESOURCE_NAME,
           workerImage: cfg.WORKER_IMAGE!,
           correlationId,
           llmModel: cfg.LLM_MODEL
