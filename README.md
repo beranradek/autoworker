@@ -99,7 +99,11 @@ scripts/opencode-auth.sh refresh                 # rotate tokens in local auth.j
 scripts/opencode-auth.sh push-azure <vault>      # (or export-local) push the fresh tokens
 ```
 
-A `refresh` calls Anthropic's OAuth token endpoint (`grant_type=refresh_token`) and writes the rotated tokens back to `auth.json`; pairing it with `push-azure` keeps Key Vault holding a freshly-minted token so the next worker starts with a full access-token window. You can run this on a schedule (e.g. via `/loop` or cron) to avoid manual re-logins.
+A `refresh` calls Anthropic's OAuth token endpoint (`grant_type=refresh_token`) and writes the rotated tokens back to `auth.json`; pairing it with `push-azure` keeps Key Vault holding a freshly-minted token so the next worker starts with a full access-token window.
+
+Don't run `refresh` on a blind schedule: because the refresh token rotates, refreshing while a worker is still running invalidates the token that worker is using. Refresh only when the workers are idle, or just re-run it manually when a re-login is actually needed.
+
+The poller validates `OPENCODE_AUTH_JSON` before dispatching: a malformed payload fails fast, and an expired access token / missing refresh token is logged as a warning (`opencode_auth.*`). The worker harness logs the same (`opencode.auth.*`) right before launching OpenCode, so token problems show up early instead of as an opaque OpenCode error.
 
 > **Caveat:** Claude Pro/Max OAuth is intended for official Anthropic clients; using it from OpenCode is a community workaround that Anthropic may restrict at any time. For fully sanctioned headless automation, prefer a metered `ANTHROPIC_API_KEY` instead.
 

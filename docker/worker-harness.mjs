@@ -66,6 +66,28 @@ function writeOpencodeAuth(authJson, home) {
   } catch (e) {
     die("OPENCODE_AUTH_JSON is not valid JSON", { error: String(e) });
   }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+    die("OPENCODE_AUTH_JSON has no provider credentials");
+  }
+
+  // Inspect OAuth entries and log token status early (non-destructive — no refresh).
+  for (const [provider, entry] of Object.entries(parsed)) {
+    if (entry && typeof entry === "object" && entry.type === "oauth") {
+      if (!entry.refresh) {
+        log("warn", "opencode.auth.no_refresh", { provider, note: "cannot renew an expired access token" });
+      }
+      const expires = Number(entry.expires ?? 0);
+      if (expires > 0) {
+        const msLeft = expires - Date.now();
+        if (msLeft <= 0) {
+          log("warn", "opencode.auth.access_expired", { provider, expiredForMs: -msLeft, note: "OpenCode will attempt a refresh using the refresh token" });
+        } else {
+          log("info", "opencode.auth.access_valid", { provider, expiresInMs: msLeft });
+        }
+      }
+    }
+  }
+
   const dataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
   const authDir = path.join(dataHome, "opencode");
   const authPath = path.join(authDir, "auth.json");
