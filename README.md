@@ -83,9 +83,25 @@ Use an `anthropic/` model, e.g. `LLM_MODEL=anthropic/claude-opus-4-7`. For
 Azure, set `use_claude_subscription = true` (and an `anthropic/` `llm_model`) so
 Terraform wires the `opencode-auth-json` secret instead of a provider key.
 
-Note: the stored OAuth tokens are refreshed by OpenCode at runtime, but the
-refreshed tokens are not persisted back from the ephemeral worker. Re-run
-`login` + `push-azure`/`export-local` if the refresh token is ever invalidated.
+### Token lifetime & refresh
+
+`auth.json` holds two tokens (`{ "anthropic": { "type": "oauth", "access", "refresh", "expires" } }`):
+
+- **access token** — short-lived (~1 hour). OpenCode refreshes it automatically on API calls when `expires` has passed, using the refresh token.
+- **refresh token** — long-lived (weeks) but **rotates**: every refresh issues a new refresh token and invalidates the old one.
+
+Rotation is the catch for ephemeral workers: when a worker refreshes, the new refresh token dies with the container, so the copy in Key Vault / `.env` becomes stale. As long as the injected access token outlives the (short) job, OpenCode never refreshes and the stored token stays valid — so in practice you only re-login when the refresh token is invalidated (long inactivity, a usage-limit reset, Anthropic revocation, or a worker that did refresh).
+
+To stay current without a full browser re-login, refresh and re-push from the machine where you stay logged in:
+
+```bash
+scripts/opencode-auth.sh refresh                 # rotate tokens in local auth.json
+scripts/opencode-auth.sh push-azure <vault>      # (or export-local) push the fresh tokens
+```
+
+A `refresh` calls Anthropic's OAuth token endpoint (`grant_type=refresh_token`) and writes the rotated tokens back to `auth.json`; pairing it with `push-azure` keeps Key Vault holding a freshly-minted token so the next worker starts with a full access-token window. You can run this on a schedule (e.g. via `/loop` or cron) to avoid manual re-logins.
+
+> **Caveat:** Claude Pro/Max OAuth is intended for official Anthropic clients; using it from OpenCode is a community workaround that Anthropic may restrict at any time. For fully sanctioned headless automation, prefer a metered `ANTHROPIC_API_KEY` instead.
 
 Optional:
 

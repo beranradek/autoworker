@@ -12,6 +12,7 @@
 # Usage:
 #   scripts/opencode-auth.sh login                 # interactive OAuth login
 #   scripts/opencode-auth.sh show                  # print the auth.json path
+#   scripts/opencode-auth.sh refresh               # rotate tokens via the refresh token
 #   scripts/opencode-auth.sh export-local [.env]   # write OPENCODE_AUTH_JSON into .env
 #   scripts/opencode-auth.sh push-azure <vault>    # set Key Vault secret opencode-auth-json
 #
@@ -20,6 +21,10 @@ set -euo pipefail
 AUTH_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"
 AUTH_FILE="$AUTH_DIR/auth.json"
 SECRET_NAME="opencode-auth-json"
+
+# Anthropic OAuth (same client id OpenCode/Claude Code use for the PKCE flow).
+OAUTH_CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+OAUTH_TOKEN_URL="https://console.anthropic.com/v1/oauth/token"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -75,6 +80,46 @@ cmd_export_local() {
   echo "Wrote OPENCODE_AUTH_JSON into $env_file"
 }
 
+# Exchange the stored refresh token for a fresh access+refresh token and write
+# the rotated pair back to auth.json. Anthropic rotates refresh tokens, so the
+# old refresh token is invalid after this succeeds.
+cmd_refresh() {
+  need jq
+  need curl
+  require_auth_file
+  local refresh
+  refresh="$(jq -r '.anthropic.refresh // empty' "$AUTH_FILE")"
+  if [[ -z "$refresh" ]]; then
+    echo "error: no anthropic.refresh token in $AUTH_FILE. Run: $0 login" >&2
+    exit 1
+  fi
+
+  local resp
+  resp="$(curl -sS -X POST "$OAUTH_TOKEN_URL" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg rt "$refresh" --arg cid "$OAUTH_CLIENT_ID" \
+      '{grant_type:"refresh_token", refresh_token:$rt, client_id:$cid}')")"
+
+  if [[ "$(jq -r 'has("access_token")' <<<"$resp")" != "true" ]]; then
+    echo "error: refresh failed (token may be revoked or expired). Run: $0 login" >&2
+    echo "$resp" | jq -r '.error_description // .error // .' >&2 || true
+    exit 1
+  fi
+
+  local now_ms expires
+  now_ms="$(( $(date +%s) * 1000 ))"
+  expires="$(jq -r --argjson now "$now_ms" '($now + (.expires_in * 1000))' <<<"$resp")"
+
+  local tmp
+  tmp="$(mktemp)"
+  jq --argjson r "$resp" --argjson exp "$expires" \
+    '.anthropic = (.anthropic // {}) + {type:"oauth", access:$r.access_token, refresh:$r.refresh_token, expires:$exp}' \
+    "$AUTH_FILE" > "$tmp"
+  mv "$tmp" "$AUTH_FILE"
+  chmod 600 "$AUTH_FILE" 2>/dev/null || true
+  echo "Refreshed anthropic OAuth tokens in $AUTH_FILE"
+}
+
 cmd_push_azure() {
   need az
   require_auth_file
@@ -98,10 +143,11 @@ main() {
   case "$sub" in
     login) cmd_login "$@" ;;
     show) cmd_show "$@" ;;
+    refresh) cmd_refresh "$@" ;;
     export-local) cmd_export_local "$@" ;;
     push-azure) cmd_push_azure "$@" ;;
     *)
-      echo "Usage: $0 {login|show|export-local [.env]|push-azure <vault>}" >&2
+      echo "Usage: $0 {login|show|refresh|export-local [.env]|push-azure <vault>}" >&2
       exit 2
       ;;
   esac
