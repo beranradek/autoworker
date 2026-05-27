@@ -34,6 +34,10 @@ locals {
     local.llm_provider == "azure" ? "AZURE_API_KEY" :
     "OPENAI_API_KEY"
   )
+  # Claude subscription auth (OpenCode OAuth) replaces the provider api-key path.
+  use_subscription          = var.use_claude_subscription
+  use_api_key               = !var.use_claude_subscription
+  opencode_auth_secret_name = "opencode-auth-json"
 }
 
 # ---------------------------------------------------------------------------
@@ -153,10 +157,22 @@ resource "azurerm_container_app_job" "poller" {
     identity            = azurerm_user_assigned_identity.autoworker.id
   }
 
-  secret {
-    name                = local.llm_secret_name
-    key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/${local.llm_secret_name}"
-    identity            = azurerm_user_assigned_identity.autoworker.id
+  dynamic "secret" {
+    for_each = local.use_api_key ? [1] : []
+    content {
+      name                = local.llm_secret_name
+      key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/${local.llm_secret_name}"
+      identity            = azurerm_user_assigned_identity.autoworker.id
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.use_subscription ? [1] : []
+    content {
+      name                = local.opencode_auth_secret_name
+      key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/${local.opencode_auth_secret_name}"
+      identity            = azurerm_user_assigned_identity.autoworker.id
+    }
   }
 
   template {
@@ -185,12 +201,22 @@ resource "azurerm_container_app_job" "poller" {
         name  = "WORKER_IMAGE"
         value = "${azurerm_container_registry.acr.login_server}/autoworker-worker:latest"
       }
-      env {
-        name        = local.llm_env_name
-        secret_name = local.llm_secret_name
+      dynamic "env" {
+        for_each = local.use_api_key ? [1] : []
+        content {
+          name        = local.llm_env_name
+          secret_name = local.llm_secret_name
+        }
       }
       dynamic "env" {
-        for_each = local.llm_provider == "azure" ? [1] : []
+        for_each = local.use_subscription ? [1] : []
+        content {
+          name        = "OPENCODE_AUTH_JSON"
+          secret_name = local.opencode_auth_secret_name
+        }
+      }
+      dynamic "env" {
+        for_each = local.use_api_key && local.llm_provider == "azure" ? [1] : []
         content {
           name  = "AZURE_RESOURCE_NAME"
           value = var.azure_resource_name
@@ -245,8 +271,12 @@ resource "azurerm_container_app_job" "poller" {
 
   lifecycle {
     precondition {
-      condition     = local.llm_provider != "azure" || var.azure_resource_name != ""
+      condition     = local.use_subscription || local.llm_provider != "azure" || var.azure_resource_name != ""
       error_message = "azure_resource_name must be set when llm_model uses the azure/ prefix."
+    }
+    precondition {
+      condition     = !local.use_subscription || local.llm_provider == "anthropic"
+      error_message = "use_claude_subscription requires an anthropic/ llm_model (e.g. anthropic/claude-...)."
     }
   }
 }
@@ -284,10 +314,9 @@ output "secret_setup_commands" {
 
       az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-token --value "YOUR_GITHUB_PAT"
 
-    Provider key for the selected model (${var.llm_model}):
-      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name ${local.llm_secret_name} --value "YOUR_PROVIDER_KEY"
-
-    (For azure/<deployment> models also set azure_resource_name in terraform.tfvars.)
+    ${local.use_subscription ?
+    "Claude subscription auth (use_claude_subscription=true) — log in locally and push the\n    OpenCode credentials, instead of a provider api key:\n      scripts/opencode-auth.sh login\n      scripts/opencode-auth.sh push-azure ${azurerm_key_vault.kv.name}" :
+    "Provider key for the selected model (${var.llm_model}):\n      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name ${local.llm_secret_name} --value \"YOUR_PROVIDER_KEY\"\n\n    (For azure/<deployment> models also set azure_resource_name in terraform.tfvars.)"}
 
     Then build and push the images:
 

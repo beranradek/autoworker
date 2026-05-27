@@ -93,6 +93,24 @@ describe("getConfig", () => {
     );
   });
 
+  it("accepts OPENCODE_AUTH_JSON (subscription auth) in non-dry-run mode", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        JOB_RUNNER: "local-docker",
+        WORKER_IMAGE: "img",
+        OPENCODE_AUTH_JSON: '{"anthropic":{"type":"oauth"}}',
+        LLM_MODEL: "anthropic/claude-opus-4-7"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.OPENCODE_AUTH_JSON).toBe('{"anthropic":{"type":"oauth"}}');
+        expect(cfg.OPENAI_API_KEY).toBeUndefined();
+      }
+    );
+  });
+
   it("throws when no LLM provider key is set in non-dry-run mode", () => {
     withEnv(
       {

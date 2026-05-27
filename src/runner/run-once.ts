@@ -129,6 +129,7 @@ export async function runOnce(): Promise<void> {
           anthropicApiKey: cfg.ANTHROPIC_API_KEY,
           azureApiKey: cfg.AZURE_API_KEY,
           azureResourceName: cfg.AZURE_RESOURCE_NAME,
+          opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
           workerImage: cfg.WORKER_IMAGE!,
           correlationId,
           llmModel: cfg.LLM_MODEL

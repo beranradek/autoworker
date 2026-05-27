@@ -5,6 +5,7 @@ export type IssueRunInput = {
   anthropicApiKey?: string;
   azureApiKey?: string;
   azureResourceName?: string;
+  opencodeAuthJson?: string;
   workerImage: string;
   correlationId: string;
   llmModel?: string;

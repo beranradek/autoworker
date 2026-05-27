@@ -51,11 +51,41 @@ Minimum (local):
 When `DRY_RUN=false`:
 
 - `WORKER_IMAGE` (e.g. `autoworker-worker:local`)
-- One LLM provider key (the `LLM_MODEL` prefix selects the provider):
+- One LLM credential — either a provider API key or a Claude subscription (the `LLM_MODEL` prefix selects the provider):
   - `OPENAI_API_KEY` for `openai/...` models
   - `ANTHROPIC_API_KEY` for `anthropic/...` models
   - `AZURE_API_KEY` + `AZURE_RESOURCE_NAME` for `azure/<deployment>` models (deployment name must match the model name)
+  - `OPENCODE_AUTH_JSON` to use a monthly Claude subscription (Pro/Max) instead of an API key — see "Claude subscription" below
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
+
+## Claude subscription (monthly plan, no API key)
+
+Instead of a per-token API key, the worker can authenticate OpenCode with a
+monthly Claude subscription via OAuth. OpenCode stores the OAuth credentials in
+`~/.local/share/opencode/auth.json`; the worker injects that file's contents
+through the `OPENCODE_AUTH_JSON` env var (carried as a secret in ACA / Key
+Vault), and the harness writes it back to disk before launching OpenCode.
+
+Set it up with the helper:
+
+```bash
+# 1. Log in once (interactive OAuth — pick Anthropic / your subscription)
+scripts/opencode-auth.sh login
+
+# 2a. Local runs: write OPENCODE_AUTH_JSON into .env
+scripts/opencode-auth.sh export-local .env
+
+# 2b. Azure (ACA): push to Key Vault as the `opencode-auth-json` secret
+scripts/opencode-auth.sh push-azure <key-vault-name>
+```
+
+Use an `anthropic/` model, e.g. `LLM_MODEL=anthropic/claude-opus-4-7`. For
+Azure, set `use_claude_subscription = true` (and an `anthropic/` `llm_model`) so
+Terraform wires the `opencode-auth-json` secret instead of a provider key.
+
+Note: the stored OAuth tokens are refreshed by OpenCode at runtime, but the
+refreshed tokens are not persisted back from the ephemeral worker. Re-run
+`login` + `push-azure`/`export-local` if the refresh token is ever invalidated.
 
 Optional:
 
@@ -87,6 +117,8 @@ terraform apply
 ```
 
 Secrets (`GITHUB_TOKEN` plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
+
+To use a Claude subscription instead of a provider key, set `use_claude_subscription = true` with an `anthropic/` `llm_model`, then push credentials with `scripts/opencode-auth.sh push-azure <key-vault-name>` (the `opencode-auth-json` secret). See "Claude subscription" above.
 
 ### Useful Azure commands
 

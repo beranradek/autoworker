@@ -48,6 +48,12 @@ variable "azure_resource_name" {
   description = "Azure OpenAI resource name (the *.openai.azure.com subdomain, e.g. my-resource). Set when using an azure/<deployment> model; the deployment name must match the model name."
 }
 
+variable "use_claude_subscription" {
+  type        = bool
+  default     = false
+  description = "Use a monthly Claude subscription (OpenCode OAuth) instead of an LLM API key. When true, the poller reads the `opencode-auth-json` Key Vault secret (set via scripts/opencode-auth.sh push-azure) and injects it as OPENCODE_AUTH_JSON; no provider api-key secret is wired. Requires an anthropic/ llm_model."
+}
+
 variable "poll_cron" {
   type        = string
   default     = "*/2 5-19 * * 1-5"
