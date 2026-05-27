@@ -56,6 +56,7 @@ export class AcaJobRunner implements JobRunner {
         ...(input.anthropicApiKey ? { ANTHROPIC_API_KEY: input.anthropicApiKey } : {}),
         ...(input.azureApiKey ? { AZURE_API_KEY: input.azureApiKey } : {}),
         ...(input.azureResourceName ? { AZURE_RESOURCE_NAME: input.azureResourceName } : {}),
+        ...(input.opencodeAuthJson ? { OPENCODE_AUTH_JSON: input.opencodeAuthJson } : {}),
         LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
         ISSUE_URL: input.issueUrl
       }

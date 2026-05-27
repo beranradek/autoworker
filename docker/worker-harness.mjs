@@ -55,6 +55,49 @@ function readJsonFile(filePath) {
   }
 }
 
+// Materialize OpenCode's auth.json from the injected OPENCODE_AUTH_JSON so the
+// agent can authenticate with a subscription (OAuth) instead of an API key.
+// Returns the directory containing the auth file so it can be passed to the
+// OpenCode child env (XDG_DATA_HOME), keeping reads/writes consistent.
+function writeOpencodeAuth(authJson, home) {
+  let parsed;
+  try {
+    parsed = JSON.parse(authJson);
+  } catch (e) {
+    die("OPENCODE_AUTH_JSON is not valid JSON", { error: String(e) });
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+    die("OPENCODE_AUTH_JSON has no provider credentials");
+  }
+
+  // Inspect OAuth entries and log token status early (non-destructive — no refresh).
+  for (const [provider, entry] of Object.entries(parsed)) {
+    if (entry && typeof entry === "object" && entry.type === "oauth") {
+      if (!entry.refresh) {
+        log("warn", "opencode.auth.no_refresh", { provider, note: "cannot renew an expired access token" });
+      }
+      const expires = Number(entry.expires ?? 0);
+      if (expires > 0) {
+        const msLeft = expires - Date.now();
+        if (msLeft <= 0) {
+          log("warn", "opencode.auth.access_expired", { provider, expiredForMs: -msLeft, note: "OpenCode will attempt a refresh using the refresh token" });
+        } else {
+          log("info", "opencode.auth.access_valid", { provider, expiresInMs: msLeft });
+        }
+      }
+    }
+  }
+
+  const dataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+  const authDir = path.join(dataHome, "opencode");
+  const authPath = path.join(authDir, "auth.json");
+  fs.mkdirSync(authDir, { recursive: true });
+  fs.writeFileSync(authPath, JSON.stringify(parsed), { mode: 0o600 });
+  fs.chmodSync(authPath, 0o600);
+  log("info", "opencode.auth.written", { authPath, providers: Object.keys(parsed ?? {}) });
+  return dataHome;
+}
+
 async function run(cmd, args, opts) {
   const printable = [cmd, ...(args ?? [])].map((s) => (typeof s === "string" ? s : String(s)));
   log("info", "exec.start", { cmd: printable[0], args: printable.slice(1).map(redact) });
@@ -121,10 +164,11 @@ async function main() {
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
   const AZURE_API_KEY = process.env.AZURE_API_KEY || "";
   const AZURE_RESOURCE_NAME = process.env.AZURE_RESOURCE_NAME || "";
+  const OPENCODE_AUTH_JSON = process.env.OPENCODE_AUTH_JSON || "";
   const LLM_MODEL = process.env.LLM_MODEL || "openai/gpt-5-mini";
 
-  if (!OPENAI_API_KEY && !ANTHROPIC_API_KEY && !AZURE_API_KEY) {
-    die("One of OPENAI_API_KEY, ANTHROPIC_API_KEY, or AZURE_API_KEY is required");
+  if (!OPENAI_API_KEY && !ANTHROPIC_API_KEY && !AZURE_API_KEY && !OPENCODE_AUTH_JSON) {
+    die("One of OPENCODE_AUTH_JSON (subscription auth), OPENAI_API_KEY, ANTHROPIC_API_KEY, or AZURE_API_KEY is required");
   }
   if (AZURE_API_KEY && !AZURE_RESOURCE_NAME) {
     die("AZURE_RESOURCE_NAME is required when AZURE_API_KEY is set");
@@ -262,6 +306,13 @@ async function main() {
   ].join("\n");
   fs.writeFileSync(promptPath, prompt, "utf8");
 
+  // When using subscription auth, write OpenCode's auth.json before launching so
+  // the agent authenticates via the stored OAuth credentials (no API key needed).
+  let opencodeDataHome;
+  if (OPENCODE_AUTH_JSON) {
+    opencodeDataHome = writeOpencodeAuth(OPENCODE_AUTH_JSON, process.env.HOME || "/home/node");
+  }
+
   const opencodeLogPath = path.join(ARTIFACTS_DIR, "opencode.log");
   // Pass a minimal env to OpenCode to avoid leaking unrelated secrets/config.
   const opencodeEnv = {
@@ -275,6 +326,8 @@ async function main() {
     TMPDIR: process.env.TMPDIR,
     CI: process.env.CI,
     CHROME_BIN: process.env.CHROME_BIN,
+    // Point OpenCode at the same data dir we wrote auth.json into.
+    XDG_DATA_HOME: opencodeDataHome || process.env.XDG_DATA_HOME || undefined,
     OPENAI_API_KEY: OPENAI_API_KEY || undefined,
     ANTHROPIC_API_KEY: ANTHROPIC_API_KEY || undefined,
     AZURE_API_KEY: AZURE_API_KEY || undefined,

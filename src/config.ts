@@ -43,6 +43,10 @@ const schema = z.object({
   // (the *.openai.azure.com subdomain), not the full endpoint URL.
   AZURE_API_KEY: z.string().optional(),
   AZURE_RESOURCE_NAME: z.string().optional(),
+  // Claude (or any provider) subscription auth: the full contents of OpenCode's
+  // auth.json, produced by `opencode auth login`. When set, OpenCode uses the
+  // stored OAuth subscription credentials instead of a per-token API key.
+  OPENCODE_AUTH_JSON: z.string().optional(),
   LLM_MODEL: z.string().default("openai/gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
@@ -59,6 +63,7 @@ export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & {
   ANTHROPIC_API_KEY?: string;
   AZURE_API_KEY?: string;
   AZURE_RESOURCE_NAME?: string;
+  OPENCODE_AUTH_JSON?: string;
 };
 
 export function getConfig(): Config {
@@ -94,9 +99,10 @@ export function getConfig(): Config {
     const hasOpenAiKey = Boolean(parsed.data.OPENAI_API_KEY);
     const hasAnthropicKey = Boolean(parsed.data.ANTHROPIC_API_KEY);
     const hasAzureKey = Boolean(parsed.data.AZURE_API_KEY && parsed.data.AZURE_RESOURCE_NAME);
-    if (!hasOpenAiKey && !hasAnthropicKey && !hasAzureKey) {
+    const hasSubscriptionAuth = Boolean(parsed.data.OPENCODE_AUTH_JSON);
+    if (!hasOpenAiKey && !hasAnthropicKey && !hasAzureKey && !hasSubscriptionAuth) {
       throw new Error(
-        "Worker config missing: provide OPENAI_API_KEY, ANTHROPIC_API_KEY, or both AZURE_API_KEY + AZURE_RESOURCE_NAME (or set DRY_RUN=true for claim-only mode)"
+        "Worker config missing: provide OPENCODE_AUTH_JSON (subscription auth), OPENAI_API_KEY, ANTHROPIC_API_KEY, or both AZURE_API_KEY + AZURE_RESOURCE_NAME (or set DRY_RUN=true for claim-only mode)"
       );
     }
   }

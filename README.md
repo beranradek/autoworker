@@ -51,11 +51,61 @@ Minimum (local):
 When `DRY_RUN=false`:
 
 - `WORKER_IMAGE` (e.g. `autoworker-worker:local`)
-- One LLM provider key (the `LLM_MODEL` prefix selects the provider):
+- One LLM credential — either a provider API key or a Claude subscription (the `LLM_MODEL` prefix selects the provider):
   - `OPENAI_API_KEY` for `openai/...` models
   - `ANTHROPIC_API_KEY` for `anthropic/...` models
   - `AZURE_API_KEY` + `AZURE_RESOURCE_NAME` for `azure/<deployment>` models (deployment name must match the model name)
+  - `OPENCODE_AUTH_JSON` to use a monthly Claude subscription (Pro/Max) instead of an API key — see "Claude subscription" below
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
+
+## Claude subscription (monthly plan, no API key)
+
+Instead of a per-token API key, the worker can authenticate OpenCode with a
+monthly Claude subscription via OAuth. OpenCode stores the OAuth credentials in
+`~/.local/share/opencode/auth.json`; the worker injects that file's contents
+through the `OPENCODE_AUTH_JSON` env var (carried as a secret in ACA / Key
+Vault), and the harness writes it back to disk before launching OpenCode.
+
+Set it up with the helper:
+
+```bash
+# 1. Log in once (interactive OAuth — pick Anthropic / your subscription)
+scripts/opencode-auth.sh login
+
+# 2a. Local runs: write OPENCODE_AUTH_JSON into .env
+scripts/opencode-auth.sh export-local .env
+
+# 2b. Azure (ACA): push to Key Vault as the `opencode-auth-json` secret
+scripts/opencode-auth.sh push-azure <key-vault-name>
+```
+
+Use an `anthropic/` model, e.g. `LLM_MODEL=anthropic/claude-opus-4-7`. For
+Azure, set `use_claude_subscription = true` (and an `anthropic/` `llm_model`) so
+Terraform wires the `opencode-auth-json` secret instead of a provider key.
+
+### Token lifetime & refresh
+
+`auth.json` holds two tokens (`{ "anthropic": { "type": "oauth", "access", "refresh", "expires" } }`):
+
+- **access token** — short-lived (~1 hour). OpenCode refreshes it automatically on API calls when `expires` has passed, using the refresh token.
+- **refresh token** — long-lived (weeks) but **rotates**: every refresh issues a new refresh token and invalidates the old one.
+
+Rotation is the catch for ephemeral workers: when a worker refreshes, the new refresh token dies with the container, so the copy in Key Vault / `.env` becomes stale. As long as the injected access token outlives the (short) job, OpenCode never refreshes and the stored token stays valid — so in practice you only re-login when the refresh token is invalidated (long inactivity, a usage-limit reset, Anthropic revocation, or a worker that did refresh).
+
+To stay current without a full browser re-login, refresh and re-push from the machine where you stay logged in:
+
+```bash
+scripts/opencode-auth.sh refresh                 # rotate tokens in local auth.json
+scripts/opencode-auth.sh push-azure <vault>      # (or export-local) push the fresh tokens
+```
+
+A `refresh` calls Anthropic's OAuth token endpoint (`grant_type=refresh_token`) and writes the rotated tokens back to `auth.json`; pairing it with `push-azure` keeps Key Vault holding a freshly-minted token so the next worker starts with a full access-token window.
+
+Don't run `refresh` on a blind schedule: because the refresh token rotates, refreshing while a worker is still running invalidates the token that worker is using. Refresh only when the workers are idle, or just re-run it manually when a re-login is actually needed.
+
+The poller validates `OPENCODE_AUTH_JSON` before dispatching: a malformed payload fails fast, and an expired access token / missing refresh token is logged as a warning (`opencode_auth.*`). The worker harness logs the same (`opencode.auth.*`) right before launching OpenCode, so token problems show up early instead of as an opaque OpenCode error.
+
+> **Caveat:** Claude Pro/Max OAuth is intended for official Anthropic clients; using it from OpenCode is a community workaround that Anthropic may restrict at any time. For fully sanctioned headless automation, prefer a metered `ANTHROPIC_API_KEY` instead.
 
 Optional:
 
@@ -87,6 +137,8 @@ terraform apply
 ```
 
 Secrets (`GITHUB_TOKEN` plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
+
+To use a Claude subscription instead of a provider key, set `use_claude_subscription = true` with an `anthropic/` `llm_model`, then push credentials with `scripts/opencode-auth.sh push-azure <key-vault-name>` (the `opencode-auth-json` secret). See "Claude subscription" above.
 
 ### Useful Azure commands
 

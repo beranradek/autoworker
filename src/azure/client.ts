@@ -32,7 +32,7 @@ export async function createManualJob(client: ContainerAppsAPIClient, input: Cre
 
   for (const [name, value] of Object.entries(input.env)) {
     const lower = name.toLowerCase();
-    const isSecret = lower.includes("token") || lower.includes("key") || lower.includes("secret");
+    const isSecret = lower.includes("token") || lower.includes("key") || lower.includes("secret") || lower.includes("auth");
     if (isSecret) {
       const secretName = lower.replaceAll(/[^a-z0-9-]/g, "-");
       secrets.push({ name: secretName, value });

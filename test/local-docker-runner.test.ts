@@ -28,4 +28,30 @@ describe("LocalDockerJobRunner", () => {
     expect(calls[0].args.join(" ")).toContain("run --rm");
     expect(calls[0].args.join(" ")).toContain("ISSUE_URL=https://github.com/o/r/issues/1");
   });
+
+  it("passes OPENCODE_AUTH_JSON when subscription auth is provided", async () => {
+    const calls: any[] = [];
+    const spawnStub: any = (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      const child: any = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    };
+
+    const runner = new LocalDockerJobRunner(spawnStub);
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      opencodeAuthJson: '{"anthropic":{"type":"oauth"}}',
+      llmModel: "anthropic/claude-opus-4-7",
+      workerImage: "img:tag",
+      correlationId: "c1"
+    });
+
+    const argv = calls[0].args as string[];
+    expect(argv).toContain(`OPENCODE_AUTH_JSON={"anthropic":{"type":"oauth"}}`);
+    expect(argv.join(" ")).not.toContain("OPENAI_API_KEY");
+  });
 });

@@ -13,6 +13,7 @@ import type { RepoRef } from "../github/types.js";
 import { AcaJobRunner } from "../job-runner/aca.js";
 import { LocalDockerJobRunner } from "../job-runner/local-docker.js";
 import type { JobRunner } from "../job-runner/types.js";
+import { validateOpencodeAuthJson } from "../opencode-auth.js";
 
 export async function runOnce(): Promise<void> {
   const cfg = getConfig();
@@ -29,6 +30,31 @@ export async function runOnce(): Promise<void> {
     });
 
   log("info", "poll.start", { repos: repos.map((r) => `${r.owner}/${r.repo}`), dryRun });
+
+  // Surface subscription-auth problems early, before spawning any worker.
+  // An expired access token is only a warning (the worker refreshes via the
+  // refresh token); a malformed payload is fatal since every worker would fail.
+  if (!dryRun && cfg.OPENCODE_AUTH_JSON) {
+    try {
+      const v = validateOpencodeAuthJson(cfg.OPENCODE_AUTH_JSON);
+      log("info", "opencode_auth.validated", { providers: v.providers, oauthProviders: v.oauthProviders });
+      if (v.missingRefresh.length > 0) {
+        log("warn", "opencode_auth.missing_refresh", {
+          providers: v.missingRefresh,
+          note: "no refresh token — the worker cannot renew an expired access token; re-run scripts/opencode-auth.sh login"
+        });
+      }
+      if (v.expiredOauthProviders.length > 0) {
+        log("warn", "opencode_auth.access_expired", {
+          providers: v.expiredOauthProviders,
+          note: "access token expired; the worker will try to refresh via the refresh token. If that fails, re-run scripts/opencode-auth.sh login (or refresh + push-azure/export-local)"
+        });
+      }
+    } catch (err) {
+      log("error", "opencode_auth.invalid", { error: String(err) });
+      throw err;
+    }
+  }
 
   const blockedLabels = [cfg.LABEL_ACCEPTED, cfg.LABEL_IN_PROGRESS, cfg.LABEL_DONE];
 
@@ -129,6 +155,7 @@ export async function runOnce(): Promise<void> {
           anthropicApiKey: cfg.ANTHROPIC_API_KEY,
           azureApiKey: cfg.AZURE_API_KEY,
           azureResourceName: cfg.AZURE_RESOURCE_NAME,
+          opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
           workerImage: cfg.WORKER_IMAGE!,
           correlationId,
           llmModel: cfg.LLM_MODEL
