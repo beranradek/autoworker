@@ -125,7 +125,10 @@ export async function runOnce(): Promise<void> {
         .runIssue({
           issueUrl,
           githubToken: cfg.GITHUB_TOKEN,
-          openaiApiKey: cfg.OPENAI_API_KEY!,
+          openaiApiKey: cfg.OPENAI_API_KEY,
+          anthropicApiKey: cfg.ANTHROPIC_API_KEY,
+          azureApiKey: cfg.AZURE_API_KEY,
+          azureResourceName: cfg.AZURE_RESOURCE_NAME,
           workerImage: cfg.WORKER_IMAGE!,
           correlationId,
           llmModel: cfg.LLM_MODEL

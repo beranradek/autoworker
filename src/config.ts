@@ -38,6 +38,11 @@ const schema = z.object({
   ACA_JOB_NAME: z.string().min(1).default("issue-agent"),
   WORKER_IMAGE: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  // Azure OpenAI via OpenCode: it reads AZURE_API_KEY + AZURE_RESOURCE_NAME
+  // (the *.openai.azure.com subdomain), not the full endpoint URL.
+  AZURE_API_KEY: z.string().optional(),
+  AZURE_RESOURCE_NAME: z.string().optional(),
   LLM_MODEL: z.string().default("openai/gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
@@ -48,7 +53,13 @@ const schema = z.object({
 });
 
 type RawConfig = z.infer<typeof schema>;
-export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & { GITHUB_TOKEN: string; OPENAI_API_KEY?: string };
+export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & {
+  GITHUB_TOKEN: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  AZURE_API_KEY?: string;
+  AZURE_RESOURCE_NAME?: string;
+};
 
 export function getConfig(): Config {
   const env = { ...process.env } as Record<string, string | undefined>;
@@ -74,8 +85,19 @@ export function getConfig(): Config {
     }
   }
   if (!parsed.data.DRY_RUN) {
-    if (!parsed.data.WORKER_IMAGE || !parsed.data.OPENAI_API_KEY) {
-      throw new Error("Worker config missing: provide WORKER_IMAGE + OPENAI_API_KEY (or set DRY_RUN=true for claim-only mode)");
+    if (!parsed.data.WORKER_IMAGE) {
+      throw new Error("Worker config missing: provide WORKER_IMAGE (or set DRY_RUN=true for claim-only mode)");
+    }
+    if (parsed.data.AZURE_API_KEY && !parsed.data.AZURE_RESOURCE_NAME) {
+      throw new Error("Worker config missing: AZURE_RESOURCE_NAME is required when AZURE_API_KEY is set");
+    }
+    const hasOpenAiKey = Boolean(parsed.data.OPENAI_API_KEY);
+    const hasAnthropicKey = Boolean(parsed.data.ANTHROPIC_API_KEY);
+    const hasAzureKey = Boolean(parsed.data.AZURE_API_KEY && parsed.data.AZURE_RESOURCE_NAME);
+    if (!hasOpenAiKey && !hasAnthropicKey && !hasAzureKey) {
+      throw new Error(
+        "Worker config missing: provide OPENAI_API_KEY, ANTHROPIC_API_KEY, or both AZURE_API_KEY + AZURE_RESOURCE_NAME (or set DRY_RUN=true for claim-only mode)"
+      );
     }
   }
   return parsed.data as Config;

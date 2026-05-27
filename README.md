@@ -51,7 +51,10 @@ Minimum (local):
 When `DRY_RUN=false`:
 
 - `WORKER_IMAGE` (e.g. `autoworker-worker:local`)
-- `OPENAI_API_KEY`
+- One LLM provider key (the `LLM_MODEL` prefix selects the provider):
+  - `OPENAI_API_KEY` for `openai/...` models
+  - `ANTHROPIC_API_KEY` for `anthropic/...` models
+  - `AZURE_API_KEY` + `AZURE_RESOURCE_NAME` for `azure/<deployment>` models (deployment name must match the model name)
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
 
 Optional:
@@ -83,7 +86,7 @@ export TF_VAR_github_repos="myorg/myrepo"
 terraform apply
 ```
 
-Secrets (`GITHUB_TOKEN`, `OPENAI_API_KEY`) are set directly in Key Vault after apply — never in Terraform vars or tfstate.
+Secrets (`GITHUB_TOKEN` plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
 
 ### Useful Azure commands
 

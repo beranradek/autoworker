@@ -6,7 +6,7 @@ Location: `docker/`
 
 This directory contains:
 
-- `docker/worker.Dockerfile` (primary): OpenCode (`opencode`) worker using `OPENAI_API_KEY`
+- `docker/worker.Dockerfile` (primary): OpenCode (`opencode`) worker; the LLM provider is selected by the `LLM_MODEL` prefix (`openai/`, `anthropic/`, `azure/`)
 
 ## Build locally
 
@@ -23,7 +23,10 @@ docker run --rm -it autoworker-worker:local bash -lc 'whoami && opencode --versi
 
 ## Runtime inputs (env vars)
 
-- `OPENAI_API_KEY` (required)
+- One LLM provider key, matching the `LLM_MODEL` prefix (required):
+  - `OPENAI_API_KEY` for `openai/...`
+  - `ANTHROPIC_API_KEY` for `anthropic/...`
+  - `AZURE_API_KEY` + `AZURE_RESOURCE_NAME` for `azure/<deployment>` (deployment name must match the model name)
 - `GH_TOKEN` or `GITHUB_TOKEN` (required for cloning + PR/comment)
 - `ISSUE_URL` (recommended) or (`ISSUE_REPO` + `ISSUE_NUMBER`) or `ISSUE_TEXT`
 - `LLM_MODEL` (optional, default `openai/gpt-5-mini`)
@@ -38,7 +41,7 @@ The container entrypoint is a deterministic harness that:
 3. Runs `opencode run` **without** GitHub token env vars (so the agent can’t push/create PRs)
    - OpenCode is run with `--format json` for audit-friendly JSONL event output
    - The agent is instructed to write `.autoworker/result.json` (status + optional suggested commit/PR metadata)
-   - OpenCode receives only a minimal allowlist of env vars (e.g. `OPENAI_API_KEY`, `LLM_MODEL`, `PATH`, `HOME`), not the full container env
+   - OpenCode receives only a minimal allowlist of env vars (the selected provider key, `LLM_MODEL`, `PATH`, `HOME`, …), not the full container env
 4. Detects git changes (`git status --porcelain`)
 5. If changes exist, commits + pushes + creates a PR + comments the PR URL back to the issue (all deterministically via `git`/`gh`)
 

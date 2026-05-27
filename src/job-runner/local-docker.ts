@@ -14,15 +14,19 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `GH_TOKEN=${input.githubToken}`,
       "-e",
-      `GITHUB_TOKEN=${input.githubToken}`,
-      "-e",
-      `OPENAI_API_KEY=${input.openaiApiKey}`,
+      `GITHUB_TOKEN=${input.githubToken}`
+    ];
+    if (input.openaiApiKey) args.push("-e", `OPENAI_API_KEY=${input.openaiApiKey}`);
+    if (input.anthropicApiKey) args.push("-e", `ANTHROPIC_API_KEY=${input.anthropicApiKey}`);
+    if (input.azureApiKey) args.push("-e", `AZURE_API_KEY=${input.azureApiKey}`);
+    if (input.azureResourceName) args.push("-e", `AZURE_RESOURCE_NAME=${input.azureResourceName}`);
+    args.push(
       "-e",
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
       input.workerImage
-    ];
+    );
 
     log("info", "local_docker.start", { correlationId: input.correlationId, image: input.workerImage });
 

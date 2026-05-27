@@ -29,11 +29,19 @@ All other variables have sensible defaults (see `variables.tf`).
 
 ## Secrets — never in Terraform
 
-`GITHUB_TOKEN` and `OPENAI_API_KEY` are stored in Key Vault and never touch Terraform variables or `tfstate`. Set them after the first apply:
+`GITHUB_TOKEN` plus the LLM provider key are stored in Key Vault and never touch Terraform variables or `tfstate`. The provider — and therefore the secret name — is derived from the `llm_model` prefix:
+
+| `llm_model` prefix | Key Vault secret | Extra |
+|--------------------|------------------|-------|
+| `openai/`    | `openai-api-key`    | — |
+| `anthropic/` | `anthropic-api-key` | — |
+| `azure/`     | `azure-api-key`     | also set `azure_resource_name` (the `*.openai.azure.com` subdomain; deployment name must match the model name) |
+
+Set them after the first apply (see the `secret_setup_commands` output for the exact name):
 
 ```bash
 az keyvault secret set --vault-name autoworker-kv --name github-token  --value "ghp_..."
-az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."   # or anthropic-api-key / azure-api-key
 ```
 
 ## Usage
@@ -94,6 +102,15 @@ az containerapp job start --name autoworker-poller --resource-group autoworker-r
 export TF_VAR_poll_cron="*/5 * * * *"
 export TF_VAR_llm_model="openai/gpt-4o-mini"
 terraform apply
+```
+
+To switch provider, change `llm_model` and set the matching Key Vault secret. Example for Azure OpenAI:
+
+```bash
+export TF_VAR_llm_model="azure/gpt-4o"            # deployment name must be "gpt-4o"
+export TF_VAR_azure_resource_name="my-resource"   # the my-resource.openai.azure.com subdomain
+terraform apply
+az keyvault secret set --vault-name autoworker-kv --name azure-api-key --value "<AZURE_API_KEY>"
 ```
 
 ## Cleanup
