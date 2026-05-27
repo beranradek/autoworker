@@ -88,6 +88,9 @@ export function getConfig(): Config {
     if (!parsed.data.WORKER_IMAGE) {
       throw new Error("Worker config missing: provide WORKER_IMAGE (or set DRY_RUN=true for claim-only mode)");
     }
+    if (parsed.data.AZURE_API_KEY && !parsed.data.AZURE_RESOURCE_NAME) {
+      throw new Error("Worker config missing: AZURE_RESOURCE_NAME is required when AZURE_API_KEY is set");
+    }
     const hasOpenAiKey = Boolean(parsed.data.OPENAI_API_KEY);
     const hasAnthropicKey = Boolean(parsed.data.ANTHROPIC_API_KEY);
     const hasAzureKey = Boolean(parsed.data.AZURE_API_KEY && parsed.data.AZURE_RESOURCE_NAME);

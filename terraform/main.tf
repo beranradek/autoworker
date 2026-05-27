@@ -242,6 +242,13 @@ resource "azurerm_container_app_job" "poller" {
     parallelism              = 1
     replica_completion_count = 1
   }
+
+  lifecycle {
+    precondition {
+      condition     = local.llm_provider != "azure" || var.azure_resource_name != ""
+      error_message = "azure_resource_name must be set when llm_model uses the azure/ prefix."
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
