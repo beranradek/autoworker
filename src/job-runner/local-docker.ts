@@ -66,7 +66,7 @@ export class LocalDockerJobRunner implements JobRunner {
   }
 
   runPrReview(input: PrReviewRunInput): Promise<PrReviewRunResult> {
-    const containerName = `pr-review-${sanitizeContainerName(input.correlationId)}`;
+    const containerName = sanitizeContainerName(input.correlationId);
     const args = [
       "run",
       "--name",

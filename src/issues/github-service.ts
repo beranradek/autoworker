@@ -23,6 +23,14 @@ export class GitHubIssueService implements IssueService {
 
     const raw = res.data.filter((i) => !i.pull_request);
 
+    if (res.data.length === 100) {
+      log("warn", "github_service.list_issues.truncated", {
+        repo: `${this.repo.owner}/${this.repo.repo}`,
+        state,
+        note: "fetched exactly 100 issues; issues beyond the first page are not processed in this cycle"
+      });
+    }
+
     const result: Issue[] = [];
     for (const i of raw) {
       const labels = normalizeLabels(i.labels as unknown[]);

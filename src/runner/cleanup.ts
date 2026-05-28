@@ -102,7 +102,7 @@ export async function cleanupDockerContainers(
     if (dryRun) continue;
 
     try {
-      execSyncFn(`docker rm ${name}`);
+      execSyncFn(`docker rm ${JSON.stringify(name)}`);
       deleted += 1;
     } catch (rmErr: any) {
       // Container may have already been removed (e.g. by another process or `docker run --rm`).

@@ -31,7 +31,7 @@ function makeJobName(prefix: string, correlationId: string): string {
     .replaceAll(/[^a-z0-9-]/gi, "-")
     .toLowerCase()
     .slice(-maxSuffixLen)
-    .replace(/^-+|-+$/, "");
+    .replace(/^-+|-+$/g, "");
   return `${jobPrefix}${safeSuffix}`;
 }
 

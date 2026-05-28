@@ -149,10 +149,11 @@ describe("LocalDockerJobRunner", () => {
     expect(joined).toContain("ISSUE_URL=https://github.com/o/r/issues/1");
   });
 
-  it("runPrReview container name has pr-review- prefix", async () => {
+  it("runPrReview container name matches sanitized correlationId (which carries the pr-review- prefix)", async () => {
     const { calls, spawnStub } = makeSpawnStub();
     const runner = new LocalDockerJobRunner(spawnStub);
 
+    // correlationId format produced by orchestrate.ts always starts with "pr-review-"
     await runner.runPrReview({
       issueUrl: "https://github.com/o/r/issues/1",
       prUrl: "https://github.com/o/r/pull/42",
@@ -160,12 +161,14 @@ describe("LocalDockerJobRunner", () => {
       baseBranch: "main",
       githubToken: "gh",
       workerImage: "img:tag",
-      correlationId: "corr-42"
+      correlationId: "pr-review-o-r-42-1716900000000"
     });
 
     const nameIdx = calls[0].args.indexOf("--name");
     expect(nameIdx).toBeGreaterThan(-1);
     expect(calls[0].args[nameIdx + 1]).toMatch(/^pr-review-/);
+    // No duplicate prefix: sanitizeContainerName(correlationId) is used directly
+    expect(calls[0].args[nameIdx + 1]).not.toMatch(/^pr-review-pr-review-/);
   });
 
   it("runPrReview spawns with detached: true and no --rm", async () => {
