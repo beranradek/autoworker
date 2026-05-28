@@ -183,7 +183,7 @@ describe("getConfig", () => {
         const cfg = getConfig();
         expect(cfg.LABEL_PR_CREATED).toBe("pr-created");
         expect(cfg.LABEL_PR_REVIEWED).toBe("pr-reviewed");
-        expect(cfg.LABEL_PR_REVIEW_DISPATCHED).toBe("pr-review-dispatched");
+        expect(cfg.LABEL_IN_REVIEW).toBe("in-review");
         expect(cfg.LABEL_HUMAN_NEEDED).toBe("human-needed");
       }
     );

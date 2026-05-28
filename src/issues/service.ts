@@ -10,6 +10,6 @@ export interface IssueService {
   findLinkedPr(issue: Issue): Promise<PrInfo | null>;
   mergePr(pr: PrInfo): Promise<void>;
   isMentionedByWorker(issue: Issue): Promise<boolean>;
-  isPrReviewDispatched(issue: Issue): Promise<boolean>;
-  markPrReviewDispatched(issue: Issue): Promise<void>;
+  isInReview(issue: Issue): Promise<boolean>;
+  markInReview(issue: Issue): Promise<void>;
 }

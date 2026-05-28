@@ -26,7 +26,7 @@ function makeConfig(overrides = {}): any {
     LABEL_PR_CREATED: "pr-created",
     LABEL_PR_REVIEWED: "pr-reviewed",
     LABEL_HUMAN_NEEDED: "human-needed",
-    LABEL_PR_REVIEW_DISPATCHED: "pr-review-dispatched",
+    LABEL_IN_REVIEW: "in-review",
     PR_MERGE_METHOD: "squash",
     ...overrides,
   };
@@ -187,7 +187,7 @@ describe("GitHubIssueService – transitionTo", () => {
     );
   });
 
-  it("'pr_reviewed' (approved): adds pr-reviewed, removes pr-review-dispatched, does NOT add human-needed", async () => {
+  it("'pr_reviewed' (approved): adds pr-reviewed, removes in-review, does NOT add human-needed", async () => {
     const octokit = makeOctokit();
     const svc = new GitHubIssueService(octokit, repo, makeConfig());
     await svc.transitionTo(makeIssue(), "pr_reviewed");
@@ -195,7 +195,7 @@ describe("GitHubIssueService – transitionTo", () => {
       expect.objectContaining({ labels: ["pr-reviewed"] })
     );
     expect(octokit.issues.removeLabel).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "pr-review-dispatched" })
+      expect.objectContaining({ name: "in-review" })
     );
     const addCalls = octokit.issues.addLabels.mock.calls as any[][];
     const addedLabels = addCalls.flatMap((args) => args[0].labels);
@@ -556,28 +556,28 @@ describe("GitHubIssueService – isMentionedByWorker", () => {
   });
 });
 
-describe("GitHubIssueService – isPrReviewDispatched / markPrReviewDispatched", () => {
-  it("isPrReviewDispatched returns true when labels contain pr-review-dispatched", async () => {
+describe("GitHubIssueService – isInReview / markInReview", () => {
+  it("isInReview returns true when labels contain in-review", async () => {
     const svc = new GitHubIssueService(makeOctokit(), repo, makeConfig());
-    const issue = makeIssue({ labels: ["pr-created", "pr-review-dispatched"] });
-    const result = await svc.isPrReviewDispatched(issue);
+    const issue = makeIssue({ labels: ["pr-created", "in-review"] });
+    const result = await svc.isInReview(issue);
     expect(result).toBe(true);
   });
 
-  it("isPrReviewDispatched returns false when labels do not contain pr-review-dispatched", async () => {
+  it("isInReview returns false when labels do not contain in-review", async () => {
     const svc = new GitHubIssueService(makeOctokit(), repo, makeConfig());
     const issue = makeIssue({ labels: ["pr-created"] });
-    const result = await svc.isPrReviewDispatched(issue);
+    const result = await svc.isInReview(issue);
     expect(result).toBe(false);
   });
 
-  it("markPrReviewDispatched calls addLabels with ['pr-review-dispatched']", async () => {
+  it("markInReview calls addLabels with ['in-review']", async () => {
     const octokit = makeOctokit();
     const svc = new GitHubIssueService(octokit, repo, makeConfig());
     const issue = makeIssue({ number: 5 });
-    await svc.markPrReviewDispatched(issue);
+    await svc.markInReview(issue);
     expect(octokit.issues.addLabels).toHaveBeenCalledWith(
-      expect.objectContaining({ issue_number: 5, labels: ["pr-review-dispatched"] })
+      expect.objectContaining({ issue_number: 5, labels: ["in-review"] })
     );
   });
 });

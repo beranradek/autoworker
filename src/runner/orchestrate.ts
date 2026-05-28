@@ -32,7 +32,7 @@ export async function runOrchestration(
     const issues = await service.listIssuesByState("pr_created");
     for (const issue of issues) {
       try {
-        if (await service.isPrReviewDispatched(issue)) continue;
+        if (await service.isInReview(issue)) continue;
         const pr = await service.findLinkedPr(issue);
         if (!pr) {
           log("warn", "orchestrate.pr_review.no_pr", { repo: repoKey, issue: issue.number });
@@ -42,7 +42,7 @@ export async function runOrchestration(
           log("info", "orchestrate.pr_review.dry_run", { repo: repoKey, issue: issue.number });
           continue;
         }
-        await service.markPrReviewDispatched(issue);
+        await service.markInReview(issue);
         const correlationId = `pr-review-${repoKey.replace("/", "-")}-${issue.number}-${Date.now()}`;
         try {
           await runner.runPrReview({
@@ -61,15 +61,15 @@ export async function runOrchestration(
             llmModel: cfg.LLM_MODEL
           });
         } catch (runErr) {
-          // markPrReviewDispatched already succeeded, so the issue has the
-          // pr-review-dispatched label but no worker running. It will not be
+          // markInReview already succeeded, so the issue has the
+          // in-review label but no worker running. It will not be
           // retried automatically. Remove the label manually to re-enable dispatch.
           log("error", "orchestrate.pr_review.run_failed", {
             repo: repoKey,
             issue: issue.number,
             correlationId,
             error: String(runErr),
-            note: `pr-review-dispatched label was set but the worker failed to start; remove the "${cfg.LABEL_PR_REVIEW_DISPATCHED}" label from issue #${issue.number} to allow a re-dispatch`
+            note: `in-review label was set but the worker failed to start; remove the "${cfg.LABEL_IN_REVIEW}" label from issue #${issue.number} to allow a re-dispatch`
           });
           throw runErr;
         }

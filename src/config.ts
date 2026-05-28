@@ -71,7 +71,7 @@ const schema = z.object({
   LABEL_PR_CREATED: z.string().default("pr-created"),
   LABEL_PR_REVIEWED: z.string().default("pr-reviewed"),
   LABEL_HUMAN_NEEDED: z.string().default("human-needed"),
-  LABEL_PR_REVIEW_DISPATCHED: z.string().default("pr-review-dispatched"),
+  LABEL_IN_REVIEW: z.string().default("in-review"),
 
   PR_MERGE_METHOD: z.enum(["squash", "merge", "rebase"]).default("squash"),
 

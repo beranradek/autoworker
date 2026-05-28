@@ -62,7 +62,7 @@ export class GitHubIssueService implements IssueService {
     } else if (newState === "pr_reviewed") {
       await this.addLabel(issue.number, this.cfg.LABEL_PR_REVIEWED);
       // Remove all predecessor labels so closed/human-audited issues stay clean.
-      await this.removeLabel(issue.number, this.cfg.LABEL_PR_REVIEW_DISPATCHED);
+      await this.removeLabel(issue.number, this.cfg.LABEL_IN_REVIEW);
       await this.removeLabel(issue.number, this.cfg.LABEL_PR_CREATED);
       await this.removeLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
       if (opts?.prReviewOutcome === "human_needed") {
@@ -202,12 +202,12 @@ export class GitHubIssueService implements IssueService {
     return false;
   }
 
-  async isPrReviewDispatched(issue: Issue): Promise<boolean> {
-    return issue.labels.some((l) => l.toLowerCase() === this.cfg.LABEL_PR_REVIEW_DISPATCHED.toLowerCase());
+  async isInReview(issue: Issue): Promise<boolean> {
+    return issue.labels.some((l) => l.toLowerCase() === this.cfg.LABEL_IN_REVIEW.toLowerCase());
   }
 
-  async markPrReviewDispatched(issue: Issue): Promise<void> {
-    await this.addLabel(issue.number, this.cfg.LABEL_PR_REVIEW_DISPATCHED);
+  async markInReview(issue: Issue): Promise<void> {
+    await this.addLabel(issue.number, this.cfg.LABEL_IN_REVIEW);
   }
 
   private async addLabel(issueNumber: number, label: string): Promise<void> {

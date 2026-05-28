@@ -15,7 +15,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     LABEL_PR_CREATED: "pr-created",
     LABEL_PR_REVIEWED: "pr-reviewed",
     LABEL_HUMAN_NEEDED: "human-needed",
-    LABEL_PR_REVIEW_DISPATCHED: "pr-review-dispatched",
+    LABEL_IN_REVIEW: "in-review",
     POLL_INTERVAL_SECONDS: 60,
     MAX_ACCEPT_PER_RUN: 5,
     DRY_RUN: false,
@@ -51,8 +51,8 @@ function makeService(overrides: Partial<IssueService> = {}): IssueService {
     findLinkedPr: vi.fn().mockResolvedValue(null),
     mergePr: vi.fn().mockResolvedValue(undefined),
     isMentionedByWorker: vi.fn().mockResolvedValue(false),
-    isPrReviewDispatched: vi.fn().mockResolvedValue(false),
-    markPrReviewDispatched: vi.fn().mockResolvedValue(undefined),
+    isInReview: vi.fn().mockResolvedValue(false),
+    markInReview: vi.fn().mockResolvedValue(undefined),
     ...overrides
   };
 }
@@ -203,40 +203,40 @@ describe("runOrchestration – STEP_PR_REVIEW", () => {
     expect(service.listIssuesByState).toHaveBeenCalledWith("pr_created");
   });
 
-  it("dispatches PR review: calls markPrReviewDispatched then runPrReview", async () => {
+  it("dispatches PR review: calls markInReview then runPrReview", async () => {
     const issue = makeIssue({ state: "pr_created", labels: ["pr-created"] });
     const service = makeService({
       listIssuesByState: vi.fn().mockImplementation((state) =>
         state === "pr_created" ? Promise.resolve([issue]) : Promise.resolve([])
       ),
-      isPrReviewDispatched: vi.fn().mockResolvedValue(false),
+      isInReview: vi.fn().mockResolvedValue(false),
       findLinkedPr: vi.fn().mockResolvedValue(pr)
     });
     const markOrder: string[] = [];
-    service.markPrReviewDispatched = vi.fn().mockImplementation(() => { markOrder.push("mark"); return Promise.resolve(); });
+    service.markInReview = vi.fn().mockImplementation(() => { markOrder.push("mark"); return Promise.resolve(); });
     const runner = makeRunner();
     (runner.runPrReview as ReturnType<typeof vi.fn>).mockImplementation(() => { markOrder.push("run"); return Promise.resolve({ runner: "local-docker" }); });
 
     await runOrchestration(service, runner, prReviewConfig, "owner/repo");
 
-    expect(service.markPrReviewDispatched).toHaveBeenCalledWith(issue);
+    expect(service.markInReview).toHaveBeenCalledWith(issue);
     expect(runner.runPrReview).toHaveBeenCalledOnce();
     // mark must happen before run so a crash in runPrReview doesn't cause a re-dispatch loop
     expect(markOrder).toEqual(["mark", "run"]);
   });
 
-  it("skips issue when isPrReviewDispatched returns true", async () => {
-    const issue = makeIssue({ state: "pr_created", labels: ["pr-created", "pr-review-dispatched"] });
+  it("skips issue when isInReview returns true", async () => {
+    const issue = makeIssue({ state: "pr_created", labels: ["pr-created", "in-review"] });
     const service = makeService({
       listIssuesByState: vi.fn().mockImplementation((state) =>
         state === "pr_created" ? Promise.resolve([issue]) : Promise.resolve([])
       ),
-      isPrReviewDispatched: vi.fn().mockResolvedValue(true)
+      isInReview: vi.fn().mockResolvedValue(true)
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, prReviewConfig, "owner/repo");
     expect(runner.runPrReview).not.toHaveBeenCalled();
-    expect(service.markPrReviewDispatched).not.toHaveBeenCalled();
+    expect(service.markInReview).not.toHaveBeenCalled();
   });
 
   it("skips dispatch when no linked PR is found", async () => {
@@ -245,13 +245,13 @@ describe("runOrchestration – STEP_PR_REVIEW", () => {
       listIssuesByState: vi.fn().mockImplementation((state) =>
         state === "pr_created" ? Promise.resolve([issue]) : Promise.resolve([])
       ),
-      isPrReviewDispatched: vi.fn().mockResolvedValue(false),
+      isInReview: vi.fn().mockResolvedValue(false),
       findLinkedPr: vi.fn().mockResolvedValue(null)
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, prReviewConfig, "owner/repo");
     expect(runner.runPrReview).not.toHaveBeenCalled();
-    expect(service.markPrReviewDispatched).not.toHaveBeenCalled();
+    expect(service.markInReview).not.toHaveBeenCalled();
   });
 
   it("does NOT dispatch in DRY_RUN mode", async () => {
@@ -260,13 +260,13 @@ describe("runOrchestration – STEP_PR_REVIEW", () => {
       listIssuesByState: vi.fn().mockImplementation((state) =>
         state === "pr_created" ? Promise.resolve([issue]) : Promise.resolve([])
       ),
-      isPrReviewDispatched: vi.fn().mockResolvedValue(false),
+      isInReview: vi.fn().mockResolvedValue(false),
       findLinkedPr: vi.fn().mockResolvedValue(pr)
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, makeConfig({ STEP_PR_REVIEW: true, STEP_IMPLEMENTATION: false, DRY_RUN: true }), "owner/repo");
     expect(runner.runPrReview).not.toHaveBeenCalled();
-    expect(service.markPrReviewDispatched).not.toHaveBeenCalled();
+    expect(service.markInReview).not.toHaveBeenCalled();
   });
 
   it("continues processing remaining issues after a per-issue error", async () => {
@@ -276,12 +276,12 @@ describe("runOrchestration – STEP_PR_REVIEW", () => {
       listIssuesByState: vi.fn().mockImplementation((state) =>
         state === "pr_created" ? Promise.resolve([issue1, issue2]) : Promise.resolve([])
       ),
-      isPrReviewDispatched: vi.fn().mockResolvedValue(false),
+      isInReview: vi.fn().mockResolvedValue(false),
       findLinkedPr: vi.fn()
         .mockResolvedValueOnce(pr)
         .mockResolvedValueOnce(pr)
     });
-    service.markPrReviewDispatched = vi.fn()
+    service.markInReview = vi.fn()
       .mockRejectedValueOnce(new Error("label API down"))
       .mockResolvedValueOnce(undefined);
     const runner = makeRunner();
