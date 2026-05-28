@@ -9,9 +9,7 @@ const schema = z.object({
   JOB_RUNNER: z.enum(["local-docker", "aca"]).default("local-docker"),
 
   WORKER_MENTION: z.string().default("@worker"),
-  LABEL_ACCEPTED: z.string().default("accepted"),
   LABEL_IN_PROGRESS: z.string().default("in-progress"),
-  LABEL_DONE: z.string().default("done"),
 
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
   MAX_ACCEPT_PER_RUN: z.coerce.number().int().positive().default(1),
@@ -53,7 +51,32 @@ const schema = z.object({
     .enum(["0", "1", "true", "false"])
     .optional()
     .transform((v) => v === "1" || v === "true")
-    .default(false)
+    .default(false),
+
+  STEP_PR_MERGE: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((v) => v === "1" || v === "true")
+    .default(false),
+  STEP_PR_REVIEW: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((v) => v === "1" || v === "true")
+    .default(true),
+  STEP_IMPLEMENTATION: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((v) => v === "1" || v === "true")
+    .default(true),
+
+  LABEL_PR_CREATED: z.string().default("pr-created"),
+  LABEL_PR_REVIEWED: z.string().default("pr-reviewed"),
+  LABEL_HUMAN_NEEDED: z.string().default("human-needed"),
+  LABEL_PR_REVIEW_DISPATCHED: z.string().default("pr-review-dispatched"),
+
+  PR_MERGE_METHOD: z.enum(["squash", "merge", "rebase"]).default("squash"),
+
+  PR_REVIEW_WORKER_IMAGE: z.string().optional()
 });
 
 type RawConfig = z.infer<typeof schema>;
