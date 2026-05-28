@@ -20,7 +20,7 @@ Current mitigation: `<user-content>` XML tags + explicit prompt injection constr
 
 ## Proposed approach
 
-Switch from `opencode run` to `opencode serve` mode, communicating via HTTP SDK/API — the same pattern used by the aiplatform project (`apps/worker/src/activities/frameworks/opencode.py`, ~1500 lines).
+Switch from `opencode run` to `opencode serve` mode, communicating via HTTP SDK/API.
 
 ### How it would work
 
@@ -60,7 +60,6 @@ Switch from `opencode run` to `opencode serve` mode, communicating via HTTP SDK/
 ### Benefits
 - **True system/user separation**: system instructions and untrusted user content are distinct messages — stronger prompt injection resistance as guaranteed by the LLM's message-role handling
 - **Richer interaction**: can support HIL (human-in-the-loop) permission requests mid-session, multi-turn conversation if needed
-- **Aligns with aiplatform**: consistent pattern across the company's agent infrastructure
 
 ### Costs
 - **Complexity**: ~300–500 lines of server lifecycle management (port detection, spawn, health-check loop, graceful shutdown), session management, polling loops — vs. current ~10 lines per mode
