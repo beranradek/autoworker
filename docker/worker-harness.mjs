@@ -26,7 +26,8 @@ function redact(str) {
     .replaceAll(/\b(ghp_[A-Za-z0-9]{20,})\b/g, "***")
     .replaceAll(/\b(github_pat_[A-Za-z0-9_]{20,})\b/g, "***")
     .replaceAll(/(sk-ant-[A-Za-z0-9_-]{20,})/g, "***")
-    .replaceAll(/\b(sk-[A-Za-z0-9]{20,})\b/g, "***");
+    .replaceAll(/\b(sk-[A-Za-z0-9]{20,})\b/g, "***")
+    .replaceAll(/\bAUTHORIZATION: basic [A-Za-z0-9+/=]{20,}\b/g, "AUTHORIZATION: basic ***");
 }
 
 function sanitizeBranchPart(input) {
@@ -158,7 +159,37 @@ async function runWithRetry(cmd, args, opts) {
   }
 }
 
-async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
+function resolveRejectionLabel(rejectReason) {
+  const reasonToLabel = {
+    wontfix: process.env.REJECT_LABEL_WONTFIX || "wontfix",
+    invalid: process.env.REJECT_LABEL_INVALID || "invalid",
+    duplicate: process.env.REJECT_LABEL_DUPLICATE || "duplicate",
+    help_wanted: process.env.REJECT_LABEL_HELP_WANTED || "help wanted",
+    question: process.env.REJECT_LABEL_QUESTION || "question"
+  };
+  return reasonToLabel[rejectReason] || reasonToLabel.wontfix;
+}
+
+async function spawnOpencode({ prompt, repoDir, logPath, env, timeoutMs }) {
+  const ocChild = spawn(
+    "opencode",
+    ["run", "--format", "json", "--model", env.LLM_MODEL, "--dangerously-skip-permissions", "--dir", repoDir, prompt],
+    { env, stdio: ["ignore", "pipe", "pipe"] }
+  );
+  const ocLogStream = fs.createWriteStream(logPath, { flags: "a" });
+  ocChild.stdout?.on("data", (b) => { const s = String(b); ocLogStream.write(s); process.stderr.write(s); });
+  ocChild.stderr?.on("data", (b) => { const s = String(b); ocLogStream.write(s); process.stderr.write(s); });
+  const timeout = timeoutMs > 0 ? setTimeout(() => { log("warn", "opencode.timeout", { timeoutMs }); ocChild.kill("SIGKILL"); }, timeoutMs) : null;
+  const exitCode = await new Promise((resolve, reject) => {
+    ocChild.on("error", reject);
+    ocChild.on("close", (code) => resolve(code ?? 0));
+  });
+  if (timeout) clearTimeout(timeout);
+  await new Promise((r) => ocLogStream.end(r));
+  return exitCode;
+}
+
+async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const prUrl = process.env.PR_URL || "";
   const prBranch = process.env.PR_BRANCH || "";
   const baseBranch = process.env.BASE_BRANCH || "main";
@@ -184,6 +215,8 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
     const mIssue = issueUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/([0-9]+)/);
     if (mIssue) issueNum = mIssue[3];
   }
+
+  log("info", "harness.pr_review.start", { prUrl, issueUrl, prBranch, baseBranch, llmModel: LLM_MODEL });
 
   fs.rmSync(CLONE_DIR, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(CLONE_DIR), { recursive: true });
@@ -291,41 +324,10 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
     LLM_MODEL
   };
 
-  log("info", "opencode.review.start", { model: LLM_MODEL, dir: repoDir });
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
   const reviewLogPath = path.join(ARTIFACTS_DIR, "opencode-review.log");
-  const ocChild = spawn(
-    "opencode",
-    ["run", "--format", "json", "--model", LLM_MODEL, "--dangerously-skip-permissions", "--dir", repoDir, reviewPrompt],
-    { env: opencodeEnv, stdio: ["ignore", "pipe", "pipe"] }
-  );
-
-  const ocLogStream = fs.createWriteStream(reviewLogPath, { flags: "a" });
-  ocChild.stdout?.on("data", (b) => {
-    const s = String(b);
-    ocLogStream.write(s);
-    process.stderr.write(s);
-  });
-  ocChild.stderr?.on("data", (b) => {
-    const s = String(b);
-    ocLogStream.write(s);
-    process.stderr.write(s);
-  });
-
-  const ocTimeout =
-    opencodeTimeoutMs > 0
-      ? setTimeout(() => {
-          log("warn", "opencode.review.timeout", { timeoutMs: opencodeTimeoutMs });
-          ocChild.kill("SIGKILL");
-        }, opencodeTimeoutMs)
-      : null;
-
-  const ocExitCode = await new Promise((resolve, reject) => {
-    ocChild.on("error", reject);
-    ocChild.on("close", (code) => resolve(code ?? 0));
-  });
-  if (ocTimeout) clearTimeout(ocTimeout);
-  ocLogStream.end();
+  log("info", "opencode.review.start", { model: LLM_MODEL, dir: repoDir });
+  const ocExitCode = await spawnOpencode({ prompt: reviewPrompt, repoDir, logPath: reviewLogPath, env: opencodeEnv, timeoutMs: opencodeTimeoutMs });
   log(ocExitCode === 0 ? "info" : "warn", "opencode.review.done", { exitCode: ocExitCode });
 
   const reviewResultPath = path.join(repoDir, ".autoworker", "review-result.json");
@@ -456,7 +458,7 @@ async function main() {
   });
 
   if (WORKER_MODE === "pr-review") {
-    await runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR);
+    await runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR);
     return;
   }
 
@@ -571,40 +573,9 @@ async function main() {
     LLM_MODEL
   };
 
-  log("info", "opencode.start", { model: LLM_MODEL, dir: repoDir, promptPath });
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
-  const ocChild = spawn(
-    "opencode",
-    ["run", "--format", "json", "--model", LLM_MODEL, "--dangerously-skip-permissions", "--dir", repoDir, fs.readFileSync(promptPath, "utf8")],
-    { env: opencodeEnv, stdio: ["ignore", "pipe", "pipe"] }
-  );
-
-  const ocLogStream = fs.createWriteStream(opencodeLogPath, { flags: "a" });
-  ocChild.stdout?.on("data", (b) => {
-    const s = String(b);
-    ocLogStream.write(s);
-    process.stderr.write(s);
-  });
-  ocChild.stderr?.on("data", (b) => {
-    const s = String(b);
-    ocLogStream.write(s);
-    process.stderr.write(s);
-  });
-
-  const ocTimeout =
-    opencodeTimeoutMs > 0
-      ? setTimeout(() => {
-          log("warn", "opencode.timeout", { timeoutMs: opencodeTimeoutMs });
-          ocChild.kill("SIGKILL");
-        }, opencodeTimeoutMs)
-      : null;
-
-  const ocExitCode = await new Promise((resolve, reject) => {
-    ocChild.on("error", reject);
-    ocChild.on("close", (code) => resolve(code ?? 0));
-  });
-  if (ocTimeout) clearTimeout(ocTimeout);
-  ocLogStream.end();
+  log("info", "opencode.start", { model: LLM_MODEL, dir: repoDir, promptPath });
+  const ocExitCode = await spawnOpencode({ prompt: fs.readFileSync(promptPath, "utf8"), repoDir, logPath: opencodeLogPath, env: opencodeEnv, timeoutMs: opencodeTimeoutMs });
   log(ocExitCode === 0 ? "info" : "warn", "opencode.done", { exitCode: ocExitCode, opencodeLogPath });
   if (ocExitCode !== 0) {
     die("OpenCode (opencode) exited non-zero", { exitCode: ocExitCode });
@@ -642,17 +613,10 @@ async function main() {
       if (resultFile.ok && String(resultFile.parsed?.status ?? "") === "rejected") {
         const rejectReason = String(resultFile.parsed?.rejectReason ?? "");
         const description = cleanSingleLine(resultFile.parsed?.description ?? "", 800);
-        const reasonToLabel = {
-          wontfix: process.env.REJECT_LABEL_WONTFIX || "wontfix",
-          invalid: process.env.REJECT_LABEL_INVALID || "invalid",
-          duplicate: process.env.REJECT_LABEL_DUPLICATE || "duplicate",
-          help_wanted: process.env.REJECT_LABEL_HELP_WANTED || "help wanted",
-          question: process.env.REJECT_LABEL_QUESTION || "question"
-        };
         // Always add a label so the issue cannot silently revert to open state and be re-dispatched.
-        const label = reasonToLabel[rejectReason] || (process.env.REJECT_LABEL_WONTFIX || "wontfix");
-        const acceptedLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
-        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel,
+        const label = resolveRejectionLabel(rejectReason);
+        const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
+        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel,
           "--add-label", label];
         await runWithRetry("gh", editArgs, { env: ghEnv });
         const body = [`Rejected by worker.`, rejectReason ? `Reason: ${rejectReason}` : "", description ? `Details: ${description}` : ""]
@@ -679,19 +643,12 @@ async function main() {
     const failureReason = cleanSingleLine(r.failureReason ?? "", 400);
 
     if (status === "rejected") {
-      const reasonToLabel = {
-        wontfix: process.env.REJECT_LABEL_WONTFIX || "wontfix",
-        invalid: process.env.REJECT_LABEL_INVALID || "invalid",
-        duplicate: process.env.REJECT_LABEL_DUPLICATE || "duplicate",
-        help_wanted: process.env.REJECT_LABEL_HELP_WANTED || "help wanted",
-        question: process.env.REJECT_LABEL_QUESTION || "question"
-      };
       // Always add a label so the issue cannot silently revert to open state and be re-dispatched.
-      const label = reasonToLabel[rejectReason] || (process.env.REJECT_LABEL_WONTFIX || "wontfix");
+      const label = resolveRejectionLabel(rejectReason);
       log("info", "agent.result.rejected", { rejectReason, label });
       if (ownerRepo && issueNum) {
-        const acceptedLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
-        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel,
+        const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
+        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel,
           "--add-label", label];
         await runWithRetry("gh", editArgs, { env: ghEnv });
         const body = [`Rejected by worker.`, rejectReason ? `Reason: ${rejectReason}` : "", description ? `Details: ${description}` : ""]
