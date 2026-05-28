@@ -175,6 +175,34 @@ describe("GitHubIssueService – resolveState (via listIssuesByState)", () => {
     const result = await svc.listIssuesByState("open");
     expect(result).toHaveLength(0);
   });
+
+  it("issue with in-review label does NOT appear in listIssuesByState('open')", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [makeApiIssue({ number: 1, labels: [{ name: "in-review" }] })],
+        }),
+      },
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listIssuesByState("open");
+    expect(result).toHaveLength(0);
+  });
+
+  it("issue with pr-created + in-review labels does NOT appear in listIssuesByState('open')", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [makeApiIssue({ number: 1, labels: [{ name: "pr-created" }, { name: "in-review" }] })],
+        }),
+      },
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listIssuesByState("open");
+    expect(result).toHaveLength(0);
+  });
 });
 
 describe("GitHubIssueService – transitionTo", () => {

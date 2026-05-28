@@ -58,7 +58,10 @@ export async function runOrchestration(
             opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
             workerImage: cfg.PR_REVIEW_WORKER_IMAGE ?? cfg.WORKER_IMAGE!,
             correlationId,
-            llmModel: cfg.LLM_MODEL
+            llmModel: cfg.LLM_MODEL,
+            labelInReview: cfg.LABEL_IN_REVIEW,
+            labelPrReviewed: cfg.LABEL_PR_REVIEWED,
+            labelHumanNeeded: cfg.LABEL_HUMAN_NEEDED
           });
         } catch (runErr) {
           // markInReview already succeeded, so the issue has the
@@ -110,7 +113,9 @@ export async function runOrchestration(
           opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
           workerImage: cfg.WORKER_IMAGE!,
           correlationId,
-          llmModel: cfg.LLM_MODEL
+          llmModel: cfg.LLM_MODEL,
+          labelInProgress: cfg.LABEL_IN_PROGRESS,
+          labelPrCreated: cfg.LABEL_PR_CREATED
         });
         // Count the issue as accepted immediately after the runner launches so that
         // a transitionTo failure below does not allow a second worker to be dispatched

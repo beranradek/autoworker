@@ -74,7 +74,9 @@ export class AcaJobRunner implements JobRunner {
         ...(input.azureResourceName ? { AZURE_RESOURCE_NAME: input.azureResourceName } : {}),
         ...(input.opencodeAuthJson ? { OPENCODE_AUTH_JSON: input.opencodeAuthJson } : {}),
         LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
-        ISSUE_URL: input.issueUrl
+        ISSUE_URL: input.issueUrl,
+        ...(input.labelInProgress ? { ISSUE_LABEL_IN_PROGRESS: input.labelInProgress } : {}),
+        ...(input.labelPrCreated ? { ISSUE_LABEL_PR_CREATED: input.labelPrCreated } : {})
       }
     });
 
@@ -107,7 +109,10 @@ export class AcaJobRunner implements JobRunner {
         PR_URL: input.prUrl,
         PR_BRANCH: input.prBranch,
         BASE_BRANCH: input.baseBranch,
-        ISSUE_URL: input.issueUrl
+        ISSUE_URL: input.issueUrl,
+        ...(input.labelInReview ? { ISSUE_LABEL_IN_REVIEW: input.labelInReview } : {}),
+        ...(input.labelPrReviewed ? { ISSUE_LABEL_PR_REVIEWED: input.labelPrReviewed } : {}),
+        ...(input.labelHumanNeeded ? { ISSUE_LABEL_HUMAN_NEEDED: input.labelHumanNeeded } : {})
       }
     });
 

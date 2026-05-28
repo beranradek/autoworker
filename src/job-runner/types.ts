@@ -9,6 +9,8 @@ export type ImplementationRunInput = {
   workerImage: string;
   correlationId: string;
   llmModel?: string;
+  labelInProgress?: string;
+  labelPrCreated?: string;
 };
 
 export type ImplementationRunResult = {
@@ -30,6 +32,9 @@ export type PrReviewRunInput = {
   workerImage: string;
   correlationId: string;
   llmModel?: string;
+  labelInReview?: string;
+  labelPrReviewed?: string;
+  labelHumanNeeded?: string;
 };
 
 export type PrReviewRunResult = {

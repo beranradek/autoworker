@@ -318,6 +318,83 @@ describe("LocalDockerJobRunner", () => {
     expect(corrLabelCount).toBe(1);
   });
 
+  it("runIssue forwards custom label names as ISSUE_LABEL_* env vars", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1",
+      labelInProgress: "custom-in-progress",
+      labelPrCreated: "custom-pr-created"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).toContain("ISSUE_LABEL_IN_PROGRESS=custom-in-progress");
+    expect(joined).toContain("ISSUE_LABEL_PR_CREATED=custom-pr-created");
+  });
+
+  it("runIssue omits ISSUE_LABEL_* env vars when not provided", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).not.toContain("ISSUE_LABEL_IN_PROGRESS");
+    expect(joined).not.toContain("ISSUE_LABEL_PR_CREATED");
+  });
+
+  it("runPrReview forwards custom label names as ISSUE_LABEL_* env vars", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/42",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1",
+      labelInReview: "custom-in-review",
+      labelPrReviewed: "custom-pr-reviewed",
+      labelHumanNeeded: "custom-human-needed"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).toContain("ISSUE_LABEL_IN_REVIEW=custom-in-review");
+    expect(joined).toContain("ISSUE_LABEL_PR_REVIEWED=custom-pr-reviewed");
+    expect(joined).toContain("ISSUE_LABEL_HUMAN_NEEDED=custom-human-needed");
+  });
+
+  it("runPrReview omits ISSUE_LABEL_* env vars when not provided", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/42",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).not.toContain("ISSUE_LABEL_IN_REVIEW");
+    expect(joined).not.toContain("ISSUE_LABEL_PR_REVIEWED");
+    expect(joined).not.toContain("ISSUE_LABEL_HUMAN_NEEDED");
+  });
+
   it("sanitizeContainerName falls back to 'worker' for all-symbol correlationId", async () => {
     const { calls, spawnStub } = makeSpawnStub();
     const runner = new LocalDockerJobRunner(spawnStub);

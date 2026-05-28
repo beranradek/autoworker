@@ -241,9 +241,10 @@ function resolveState(requested: IssueState, labels: string[], cfg: Config): Iss
   const inProgress = has(cfg.LABEL_IN_PROGRESS);
   const prCreated = has(cfg.LABEL_PR_CREATED);
   const prReviewed = has(cfg.LABEL_PR_REVIEWED);
+  const inReview = has(cfg.LABEL_IN_REVIEW);
 
   if (requested === "open") {
-    return !inProgress && !prCreated && !prReviewed ? "open" : null;
+    return !inProgress && !prCreated && !prReviewed && !inReview ? "open" : null;
   }
   if (requested === "in_progress") {
     return inProgress ? "in_progress" : null;

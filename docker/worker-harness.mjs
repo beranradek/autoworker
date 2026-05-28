@@ -649,10 +649,11 @@ async function main() {
           help_wanted: process.env.REJECT_LABEL_HELP_WANTED || "help wanted",
           question: process.env.REJECT_LABEL_QUESTION || "question"
         };
-        const label = reasonToLabel[rejectReason] || "";
+        // Always add a label so the issue cannot silently revert to open state and be re-dispatched.
+        const label = reasonToLabel[rejectReason] || (process.env.REJECT_LABEL_WONTFIX || "wontfix");
         const acceptedLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
-        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel];
-        if (label) editArgs.push("--add-label", label);
+        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel,
+          "--add-label", label];
         await runWithRetry("gh", editArgs, { env: ghEnv });
         const body = [`Rejected by worker.`, rejectReason ? `Reason: ${rejectReason}` : "", description ? `Details: ${description}` : ""]
           .filter(Boolean)
@@ -685,12 +686,13 @@ async function main() {
         help_wanted: process.env.REJECT_LABEL_HELP_WANTED || "help wanted",
         question: process.env.REJECT_LABEL_QUESTION || "question"
       };
-      const label = reasonToLabel[rejectReason] || "";
+      // Always add a label so the issue cannot silently revert to open state and be re-dispatched.
+      const label = reasonToLabel[rejectReason] || (process.env.REJECT_LABEL_WONTFIX || "wontfix");
       log("info", "agent.result.rejected", { rejectReason, label });
       if (ownerRepo && issueNum) {
         const acceptedLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
-        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel];
-        if (label) editArgs.push("--add-label", label);
+        const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel,
+          "--add-label", label];
         await runWithRetry("gh", editArgs, { env: ghEnv });
         const body = [`Rejected by worker.`, rejectReason ? `Reason: ${rejectReason}` : "", description ? `Details: ${description}` : ""]
           .filter(Boolean)

@@ -46,6 +46,8 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.azureApiKey) args.push("-e", `AZURE_API_KEY=${input.azureApiKey}`);
     if (input.azureResourceName) args.push("-e", `AZURE_RESOURCE_NAME=${input.azureResourceName}`);
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
+    if (input.labelInProgress) args.push("-e", `ISSUE_LABEL_IN_PROGRESS=${input.labelInProgress}`);
+    if (input.labelPrCreated) args.push("-e", `ISSUE_LABEL_PR_CREATED=${input.labelPrCreated}`);
     args.push(
       "-e",
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
@@ -88,6 +90,9 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.azureApiKey) args.push("-e", `AZURE_API_KEY=${input.azureApiKey}`);
     if (input.azureResourceName) args.push("-e", `AZURE_RESOURCE_NAME=${input.azureResourceName}`);
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
+    if (input.labelInReview) args.push("-e", `ISSUE_LABEL_IN_REVIEW=${input.labelInReview}`);
+    if (input.labelPrReviewed) args.push("-e", `ISSUE_LABEL_PR_REVIEWED=${input.labelPrReviewed}`);
+    if (input.labelHumanNeeded) args.push("-e", `ISSUE_LABEL_HUMAN_NEEDED=${input.labelHumanNeeded}`);
     args.push(
       "-e",
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
