@@ -135,7 +135,7 @@ describe("getConfig", () => {
         AZURE_API_KEY: "az-key"
       },
       () => {
-        expect(() => getConfig()).toThrow();
+        expect(() => getConfig()).toThrow(/AZURE_RESOURCE_NAME/);
       }
     );
   });

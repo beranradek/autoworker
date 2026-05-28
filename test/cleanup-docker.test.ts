@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupDockerContainers } from "../src/runner/cleanup.js";
 
 vi.mock("../src/log.js", () => ({
@@ -13,6 +13,10 @@ function makeDockerLine(name: string, createdAt: Date): string {
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 describe("cleanupDockerContainers", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("removes containers older than cutoff and skips fresh ones", () => {
     const now = Date.now();
     const old = new Date(now - 3 * ONE_HOUR_MS);

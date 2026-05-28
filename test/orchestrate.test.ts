@@ -93,6 +93,7 @@ describe("runOrchestration – STEP_IMPLEMENTATION", () => {
     await runOrchestration(service, runner, makeConfig(), "owner/repo");
     expect(service.transitionTo).toHaveBeenCalledWith(issue, "in_progress");
     expect(runner.runIssue).toHaveBeenCalledOnce();
+    expect(runner.runIssue).toHaveBeenCalledWith(expect.objectContaining({ issueUrl: issue.url }));
   });
 
   it("does NOT call transitionTo or runIssue when issue is not mentioned", async () => {
