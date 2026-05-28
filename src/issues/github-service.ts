@@ -247,10 +247,13 @@ function resolveState(requested: IssueState, labels: string[], cfg: Config): Iss
     return !inProgress && !prCreated && !prReviewed && !inReview ? "open" : null;
   }
   if (requested === "in_progress") {
-    return inProgress ? "in_progress" : null;
+    // Only match if no later-stage label is present; avoids double-dispatch when both
+    // in-progress and pr-created exist due to a race or manual label mis-management.
+    return inProgress && !prCreated && !prReviewed && !inReview ? "in_progress" : null;
   }
   if (requested === "pr_created") {
-    return prCreated ? "pr_created" : null;
+    // Only match when in-review and pr-reviewed are absent (not yet picked up for review).
+    return prCreated && !inReview && !prReviewed ? "pr_created" : null;
   }
   if (requested === "pr_reviewed") {
     return prReviewed ? "pr_reviewed" : null;

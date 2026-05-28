@@ -169,9 +169,18 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
       }
       const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
       await runWithRetry("gh", ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel], { env: ghEnv });
+      const noChangesStatus = resultFile.ok ? String(resultFile.parsed?.status ?? "") : "";
+      const noChangesFailureReason = resultFile.ok ? cleanSingleLine(resultFile.parsed?.failureReason ?? "", 400) : "";
+      const noChangesDescription = resultFile.ok ? cleanSingleLine(resultFile.parsed?.description ?? "", 800) : "";
+      const noChangesBody = noChangesStatus === "failed"
+        ? [`Worker attempted changes but reported failure with no git changes produced.`,
+            noChangesFailureReason ? `Reason: ${noChangesFailureReason}` : "",
+            noChangesDescription ? `Details: ${noChangesDescription}` : ""]
+            .filter(Boolean).join("\n")
+        : `Worker finished but produced no git changes.`;
       await runWithRetry(
         "gh",
-        ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", `Worker finished but produced no git changes.`],
+        ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", noChangesBody],
         { env: ghEnv }
       );
     }

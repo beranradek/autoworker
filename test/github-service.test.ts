@@ -203,6 +203,63 @@ describe("GitHubIssueService – resolveState (via listIssuesByState)", () => {
     const result = await svc.listIssuesByState("open");
     expect(result).toHaveLength(0);
   });
+
+  it("issue with both in-progress and pr-created does NOT appear in listIssuesByState('in_progress') — pr-created takes priority", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [makeApiIssue({ number: 1, labels: [{ name: "in-progress" }, { name: "pr-created" }] })],
+        }),
+      },
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listIssuesByState("in_progress");
+    expect(result).toHaveLength(0);
+  });
+
+  it("issue with both in-progress and pr-created appears in listIssuesByState('pr_created')", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [makeApiIssue({ number: 1, labels: [{ name: "in-progress" }, { name: "pr-created" }] })],
+        }),
+      },
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listIssuesByState("pr_created");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.state).toBe("pr_created");
+  });
+
+  it("issue with pr-created and in-review does NOT appear in listIssuesByState('pr_created') — in-review takes priority", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [makeApiIssue({ number: 1, labels: [{ name: "pr-created" }, { name: "in-review" }] })],
+        }),
+      },
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listIssuesByState("pr_created");
+    expect(result).toHaveLength(0);
+  });
+
+  it("issue with pr-created and pr-reviewed does NOT appear in listIssuesByState('pr_created') — pr-reviewed takes priority", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [makeApiIssue({ number: 1, labels: [{ name: "pr-created" }, { name: "pr-reviewed" }] })],
+        }),
+      },
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listIssuesByState("pr_created");
+    expect(result).toHaveLength(0);
+  });
 });
 
 describe("GitHubIssueService – transitionTo", () => {
