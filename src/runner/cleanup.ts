@@ -1,6 +1,55 @@
+import { execFileSync } from "node:child_process";
 import { getConfig } from "../config.js";
 import { log } from "../log.js";
 import { createAcaClient } from "../azure/client.js";
+
+function parseDockerDate(s: string): Date {
+  const normalized = s.replace(/\s+[A-Z]{2,5}$/, "");
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? new Date(0) : d;
+}
+
+export type ExecDockerFn = (args: string[]) => string;
+
+export function defaultExecDocker(args: string[]): string {
+  return execFileSync("docker", args, { encoding: "utf8" });
+}
+
+export function cleanupDockerContainers(
+  cutoffMs: number,
+  dryRun: boolean,
+  execDocker: ExecDockerFn = defaultExecDocker
+): void {
+  const psOutput = execDocker([
+    "ps",
+    "--all",
+    "--filter",
+    "label=autoworker.managed=true",
+    "--filter",
+    "status=exited",
+    "--format",
+    "{{json .}}"
+  ]);
+  const lines = psOutput.split("\n").filter(Boolean);
+  let removed = 0;
+  for (const line of lines) {
+    let entry: Record<string, unknown>;
+    try {
+      entry = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const name = (entry.Names as string).replace(/^\//, "");
+    const createdAt = parseDockerDate(entry.CreatedAt as string);
+    if (createdAt.getTime() > cutoffMs) continue;
+    log("info", "cleanup_docker.candidate", { name, createdAt: createdAt.toISOString() });
+    if (dryRun) continue;
+    execDocker(["rm", name]);
+    removed += 1;
+    log("info", "cleanup_docker.removed", { name });
+  }
+  log("info", "cleanup_docker.done", { removed, total: lines.length });
+}
 
 function parseTimestampFromJobName(name: string): Date | null {
   const m = name.match(/-issue-\d+-([0-9]{8}t?[0-9]{6}z?)$/i);

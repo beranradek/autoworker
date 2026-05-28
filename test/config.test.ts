@@ -206,4 +206,37 @@ describe("getConfig", () => {
       }
     );
   });
+
+  it("throws when WORKER_IMAGE is absent even if PR_REVIEW_WORKER_IMAGE is set", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        JOB_RUNNER: "local-docker",
+        PR_REVIEW_WORKER_IMAGE: "review-img",
+        OPENAI_API_KEY: "oai-key"
+      },
+      () => {
+        expect(() => getConfig()).toThrow(/Worker config missing/);
+      }
+    );
+  });
+
+  it("accepts configuration where PR_REVIEW_WORKER_IMAGE overrides WORKER_IMAGE when both are present", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        JOB_RUNNER: "local-docker",
+        WORKER_IMAGE: "base-img",
+        PR_REVIEW_WORKER_IMAGE: "review-img",
+        OPENAI_API_KEY: "oai-key"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.WORKER_IMAGE).toBe("base-img");
+        expect(cfg.PR_REVIEW_WORKER_IMAGE).toBe("review-img");
+      }
+    );
+  });
 });

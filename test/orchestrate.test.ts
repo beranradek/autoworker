@@ -120,6 +120,20 @@ describe("runOrchestration – STEP_IMPLEMENTATION", () => {
     expect(runner.runIssue).not.toHaveBeenCalled();
   });
 
+  it("calls runIssue BEFORE transitionTo('in_progress')", async () => {
+    const callOrder: string[] = [];
+    const issue = makeIssue();
+    const service = makeService({
+      listIssuesByState: vi.fn().mockResolvedValue([issue]),
+      isMentionedByWorker: vi.fn().mockResolvedValue(true)
+    });
+    service.transitionTo = vi.fn(async () => { callOrder.push("transitionTo"); });
+    const runner = makeRunner();
+    runner.runIssue = vi.fn(async () => { callOrder.push("runIssue"); return { runner: "local-docker" as const }; });
+    await runOrchestration(service, runner, makeConfig({ STEP_IMPLEMENTATION: true }), "o/r");
+    expect(callOrder).toEqual(["runIssue", "transitionTo"]);
+  });
+
   it("limits accepted issues to MAX_ACCEPT_PER_RUN", async () => {
     const issue1 = makeIssue({ number: 1 });
     const issue2 = makeIssue({ number: 2 });
