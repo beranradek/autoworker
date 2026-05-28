@@ -44,6 +44,10 @@ export class LocalDockerJobRunner implements JobRunner {
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
+      "--label",
+      "autoworker.managed=true",
+      "--label",
+      `autoworker.correlationId=${input.correlationId}`,
       input.workerImage
     );
 
@@ -90,6 +94,10 @@ export class LocalDockerJobRunner implements JobRunner {
       `BASE_BRANCH=${input.baseBranch}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
+      "--label",
+      "autoworker.managed=true",
+      "--label",
+      `autoworker.correlationId=${input.correlationId}`,
       input.workerImage
     );
 

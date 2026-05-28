@@ -1,6 +1,10 @@
+import { execSync as _execSync } from "node:child_process";
 import { getConfig } from "../config.js";
 import { log } from "../log.js";
 import { createAcaClient } from "../azure/client.js";
+import type { Config } from "../config.js";
+
+type ExecSyncFn = (cmd: string) => Buffer | string;
 
 function parseTimestampFromJobName(name: string): Date | null {
   const m = name.match(/-issue-\d+-([0-9]{8}t?[0-9]{6}z?)$/i);
@@ -19,13 +23,7 @@ function parseTimestampFromJobName(name: string): Date | null {
   return new Date(Date.UTC(y, mo - 1, d, h, mi, se));
 }
 
-export async function cleanupJobs(): Promise<void> {
-  const cfg = getConfig();
-  if (cfg.JOB_RUNNER !== "aca") {
-    throw new Error("cleanup is only supported for JOB_RUNNER=aca");
-  }
-  const dryRun = Boolean(cfg.DRY_RUN);
-  const cutoffHours = Number(process.env.CLEANUP_AFTER_HOURS ?? "48");
+async function cleanupAcaJobs(cfg: Config, cutoffHours: number, dryRun: boolean): Promise<void> {
   const cutoff = Date.now() - cutoffHours * 60 * 60 * 1000;
   const prefix = `${cfg.ACA_JOB_NAME}-issue-`.toLowerCase();
 
@@ -61,4 +59,63 @@ export async function cleanupJobs(): Promise<void> {
   }
 
   log("info", "cleanup.done", { deleted, total: jobs.length });
+}
+
+export async function cleanupDockerContainers(
+  cutoffHours: number,
+  dryRun: boolean,
+  execSyncFn: ExecSyncFn = _execSync
+): Promise<void> {
+  let output: string;
+  try {
+    const result = execSyncFn(
+      'docker ps -a --filter label=autoworker.managed=true --filter status=exited --format "{{json .}}"'
+    );
+    output = typeof result === "string" ? result : result.toString("utf8");
+  } catch (err: any) {
+    log("warn", "cleanup.docker.unavailable", { error: String(err?.message ?? err) });
+    return;
+  }
+
+  const lines = output.split("\n").filter((l) => l.trim().length > 0);
+  let deleted = 0;
+  const total = lines.length;
+
+  const cutoffMs = cutoffHours * 3600 * 1000;
+
+  for (const line of lines) {
+    let entry: any;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    const name: string = String(entry.Names ?? "").replace(/^\//, "");
+    const createdAtStr: string = String(entry.CreatedAt ?? "");
+    const createdAt = new Date(createdAtStr);
+
+    if (isNaN(createdAt.getTime())) continue;
+    if (Date.now() - createdAt.getTime() < cutoffMs) continue;
+
+    log("info", "cleanup.docker.delete_candidate", { name });
+    if (dryRun) continue;
+
+    execSyncFn(`docker rm ${name}`);
+    deleted += 1;
+  }
+
+  log("info", "cleanup.docker.done", { deleted, total });
+}
+
+export async function cleanupJobs(): Promise<void> {
+  const cfg = getConfig();
+  const dryRun = Boolean(cfg.DRY_RUN);
+  const cutoffHours = Number(process.env.CLEANUP_AFTER_HOURS ?? "48");
+
+  if (cfg.JOB_RUNNER === "aca") {
+    await cleanupAcaJobs(cfg, cutoffHours, dryRun);
+  } else {
+    await cleanupDockerContainers(cutoffHours, dryRun);
+  }
 }
