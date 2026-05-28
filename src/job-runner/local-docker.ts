@@ -48,7 +48,7 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
     args.push(
       "-e",
-      `LLM_MODEL=${input.llmModel ?? "openai/gpt-4o-mini"}`,
+      `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
       input.workerImage
@@ -90,7 +90,7 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
     args.push(
       "-e",
-      `LLM_MODEL=${input.llmModel ?? "openai/gpt-4o-mini"}`,
+      `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
       "-e",
       `WORKER_MODE=pr-review`,
       "-e",

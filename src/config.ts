@@ -44,7 +44,7 @@ const schema = z.object({
   // auth.json, produced by `opencode auth login`. When set, OpenCode uses the
   // stored OAuth subscription credentials instead of a per-token API key.
   OPENCODE_AUTH_JSON: z.string().optional(),
-  LLM_MODEL: z.string().default("openai/gpt-4o-mini"),
+  LLM_MODEL: z.string().default("openai/gpt-5-mini"),
 
   CREATE_JOB_IF_MISSING: z
     .enum(["0", "1", "true", "false"])

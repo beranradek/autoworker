@@ -24,7 +24,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     STEP_IMPLEMENTATION: true,
     PR_MERGE_METHOD: "squash",
     ACA_JOB_NAME: "issue-agent",
-    LLM_MODEL: "openai/gpt-4o-mini",
+    LLM_MODEL: "openai/gpt-5-mini",
     WORKER_IMAGE: "worker:latest",
     CREATE_JOB_IF_MISSING: false,
     AZURE_USE_MANAGED_IDENTITY: false,
