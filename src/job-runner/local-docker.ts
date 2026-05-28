@@ -1,16 +1,34 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
 import { log } from "../log.js";
-import type { IssueRunInput, IssueRunResult, JobRunner } from "./types.js";
+import type { ImplementationRunInput, ImplementationRunResult, JobRunner, PrReviewRunInput, PrReviewRunResult } from "./types.js";
 
 export type SpawnFn = typeof spawn;
+
+function sanitizeContainerName(id: string): string {
+  return id
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63);
+}
+
+function openLogStdio(correlationId: string): number | "ignore" {
+  const logDir = process.env.LOG_DIR;
+  if (!logDir) return "ignore";
+  return fs.openSync(`${logDir}/${correlationId}.log`, "a");
+}
 
 export class LocalDockerJobRunner implements JobRunner {
   constructor(private readonly spawnFn: SpawnFn = spawn) {}
 
-  async runIssue(input: IssueRunInput): Promise<IssueRunResult> {
+  runIssue(input: ImplementationRunInput): Promise<ImplementationRunResult> {
+    const containerName = sanitizeContainerName(input.correlationId);
     const args = [
       "run",
-      "--rm",
+      "--name",
+      containerName,
       "-e",
       `GH_TOKEN=${input.githubToken}`,
       "-e",
@@ -31,24 +49,58 @@ export class LocalDockerJobRunner implements JobRunner {
 
     log("info", "local_docker.start", { correlationId: input.correlationId, image: input.workerImage });
 
+    const logFd = openLogStdio(input.correlationId);
     const child = this.spawnFn("docker", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: process.env
+      stdio: ["ignore", logFd, logFd],
+      env: process.env,
+      detached: true
     });
+    child.unref();
 
-    child.stdout?.on("data", (buf) => log("info", "local_docker.stdout", { correlationId: input.correlationId, line: String(buf).trimEnd() }));
-    child.stderr?.on("data", (buf) => log("warn", "local_docker.stderr", { correlationId: input.correlationId, line: String(buf).trimEnd() }));
+    return Promise.resolve({ runner: "local-docker" });
+  }
 
-    const exitCode: number = await new Promise((resolve, reject) => {
-      child.on("error", reject);
-      child.on("close", (code) => resolve(code ?? 0));
+  runPrReview(input: PrReviewRunInput): Promise<PrReviewRunResult> {
+    const containerName = `pr-review-${sanitizeContainerName(input.correlationId)}`;
+    const args = [
+      "run",
+      "--name",
+      containerName,
+      "-e",
+      `GH_TOKEN=${input.githubToken}`,
+      "-e",
+      `GITHUB_TOKEN=${input.githubToken}`
+    ];
+    if (input.openaiApiKey) args.push("-e", `OPENAI_API_KEY=${input.openaiApiKey}`);
+    if (input.anthropicApiKey) args.push("-e", `ANTHROPIC_API_KEY=${input.anthropicApiKey}`);
+    if (input.azureApiKey) args.push("-e", `AZURE_API_KEY=${input.azureApiKey}`);
+    if (input.azureResourceName) args.push("-e", `AZURE_RESOURCE_NAME=${input.azureResourceName}`);
+    args.push(
+      "-e",
+      `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
+      "-e",
+      `WORKER_MODE=pr-review`,
+      "-e",
+      `PR_URL=${input.prUrl}`,
+      "-e",
+      `PR_BRANCH=${input.prBranch}`,
+      "-e",
+      `BASE_BRANCH=${input.baseBranch}`,
+      "-e",
+      `ISSUE_URL=${input.issueUrl}`,
+      input.workerImage
+    );
+
+    log("info", "local_docker.start", { correlationId: input.correlationId, image: input.workerImage });
+
+    const logFd = openLogStdio(input.correlationId);
+    const child = this.spawnFn("docker", args, {
+      stdio: ["ignore", logFd, logFd],
+      env: process.env,
+      detached: true
     });
+    child.unref();
 
-    if (exitCode !== 0) {
-      throw new Error(`Local Docker worker failed (exit ${exitCode})`);
-    }
-
-    log("info", "local_docker.done", { correlationId: input.correlationId });
-    return { runner: "local-docker" };
+    return Promise.resolve({ runner: "local-docker" });
   }
 }
