@@ -781,7 +781,7 @@ async function main() {
   });
   if (prCreateRes.exitCode !== 0) die("gh pr create failed", { exitCode: prCreateRes.exitCode });
 
-  const prUrlMatch = prCreateRes.stdout.match(/https:\/\/github\.com\/[^\s]+/);
+  const prUrlMatch = prCreateRes.stdout.match(/https:\/\/github\.com\/\S+/);
   const prUrl = prUrlMatch ? prUrlMatch[0] : "";
   if (!prUrl) die("Could not parse PR URL from gh pr create output", { stdout: redact(prCreateRes.stdout) });
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "pr-url.txt"), prUrl, "utf8");
