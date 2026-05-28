@@ -12,4 +12,6 @@ export interface IssueService {
   isMentionedByWorker(issue: Issue): Promise<boolean>;
   isInReview(issue: Issue): Promise<boolean>;
   markInReview(issue: Issue): Promise<void>;
+  unmarkInReview(issue: Issue): Promise<void>;
+  unmarkInProgress(issue: Issue): Promise<void>;
 }

@@ -53,6 +53,8 @@ function makeService(overrides: Partial<IssueService> = {}): IssueService {
     isMentionedByWorker: vi.fn().mockResolvedValue(false),
     isInReview: vi.fn().mockResolvedValue(false),
     markInReview: vi.fn().mockResolvedValue(undefined),
+    unmarkInReview: vi.fn().mockResolvedValue(undefined),
+    unmarkInProgress: vi.fn().mockResolvedValue(undefined),
     ...overrides
   };
 }
@@ -120,7 +122,7 @@ describe("runOrchestration – STEP_IMPLEMENTATION", () => {
     expect(runner.runIssue).not.toHaveBeenCalled();
   });
 
-  it("calls runIssue BEFORE transitionTo('in_progress')", async () => {
+  it("calls transitionTo('in_progress') BEFORE runIssue", async () => {
     const callOrder: string[] = [];
     const issue = makeIssue();
     const service = makeService({
@@ -131,7 +133,7 @@ describe("runOrchestration – STEP_IMPLEMENTATION", () => {
     const runner = makeRunner();
     runner.runIssue = vi.fn(async () => { callOrder.push("runIssue"); return { runner: "local-docker" as const }; });
     await runOrchestration(service, runner, makeConfig({ STEP_IMPLEMENTATION: true }), "o/r");
-    expect(callOrder).toEqual(["runIssue", "transitionTo"]);
+    expect(callOrder).toEqual(["transitionTo", "runIssue"]);
   });
 
   it("limits accepted issues to MAX_ACCEPT_PER_RUN", async () => {
@@ -223,6 +225,25 @@ describe("runOrchestration – STEP_PR_REVIEW", () => {
     expect(runner.runPrReview).toHaveBeenCalledOnce();
     // mark must happen before run so a crash in runPrReview doesn't cause a re-dispatch loop
     expect(markOrder).toEqual(["mark", "run"]);
+  });
+
+  it("rolls back in-review label when runPrReview fails to start", async () => {
+    const issue = makeIssue({ state: "pr_created", labels: ["pr-created"] });
+    const service = makeService({
+      listIssuesByState: vi.fn().mockImplementation((state) =>
+        state === "pr_created" ? Promise.resolve([issue]) : Promise.resolve([])
+      ),
+      isInReview: vi.fn().mockResolvedValue(false),
+      findLinkedPr: vi.fn().mockResolvedValue(pr),
+      markInReview: vi.fn().mockResolvedValue(undefined),
+      unmarkInReview: vi.fn().mockResolvedValue(undefined)
+    });
+    const runner = makeRunner({
+      runPrReview: vi.fn().mockRejectedValue(new Error("job create failed"))
+    });
+
+    await expect(runOrchestration(service, runner, prReviewConfig, "owner/repo")).resolves.not.toThrow();
+    expect(service.unmarkInReview).toHaveBeenCalledWith(issue);
   });
 
   it("skips issue when isInReview returns true", async () => {

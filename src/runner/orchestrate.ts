@@ -42,8 +42,8 @@ export async function runOrchestration(
           log("info", "orchestrate.pr_review.dry_run", { repo: repoKey, issue: issue.number });
           continue;
         }
-        await service.markInReview(issue);
         const correlationId = `pr-review-${repoKey.replace("/", "-")}-${issue.number}-${Date.now()}`;
+        await service.markInReview(issue);
         try {
           await runner.runPrReview({
             issueUrl: issue.url,
@@ -64,15 +64,25 @@ export async function runOrchestration(
             labelHumanNeeded: cfg.LABEL_HUMAN_NEEDED
           });
         } catch (runErr) {
-          // markInReview already succeeded, so the issue has the
-          // in-review label but no worker running. It will not be
-          // retried automatically. Remove the label manually to re-enable dispatch.
+          // Roll back the in-review label so the next poll can retry dispatch.
+          // This mirrors the "never strand work behind a label" principle used
+          // in autofactory’s workflows.
+          try {
+            await service.unmarkInReview(issue);
+          } catch (rollbackErr) {
+            log("error", "orchestrate.pr_review.rollback_failed", {
+              repo: repoKey,
+              issue: issue.number,
+              correlationId,
+              error: String(rollbackErr)
+            });
+          }
           log("error", "orchestrate.pr_review.run_failed", {
             repo: repoKey,
             issue: issue.number,
             correlationId,
             error: String(runErr),
-            note: `in-review label was set but the worker failed to start; remove the "${cfg.LABEL_IN_REVIEW}" label from issue #${issue.number} to allow a re-dispatch`
+            note: `worker failed to start; in-review label was rolled back to allow a re-dispatch on the next poll`
           });
           throw runErr;
         }
@@ -103,6 +113,10 @@ export async function runOrchestration(
           accepted++;
           continue;
         }
+        // Claim the issue first (label it) to prevent a duplicate dispatch by
+        // another orchestrator instance. If dispatch fails, roll back the label
+        // so the next poll can retry.
+        await service.transitionTo(issue, "in_progress");
         await runner.runIssue({
           issueUrl: issue.url,
           githubToken: cfg.GITHUB_TOKEN,
@@ -117,27 +131,20 @@ export async function runOrchestration(
           labelInProgress: cfg.LABEL_IN_PROGRESS,
           labelPrCreated: cfg.LABEL_PR_CREATED
         });
-        // Count the issue as accepted immediately after the runner launches so that
-        // a transitionTo failure below does not allow a second worker to be dispatched
-        // for the same issue within this poll cycle.
-        accepted++;
         log("info", "orchestrate.impl.dispatched", { repo: repoKey, issue: issueKey, correlationId });
-        // Claim the issue only after the runner has successfully launched the worker,
-        // so a runner failure leaves the issue in "open" state and it can be retried.
+        accepted++;
+      } catch (err) {
+        // Best-effort rollback of the in-progress label. This avoids stranding
+        // an issue in a claimed state when the worker fails to launch.
         try {
-          await service.transitionTo(issue, "in_progress");
-        } catch (labelErr) {
-          // Worker is already running. The issue will appear as "open" on the next poll
-          // and a second worker will be dispatched unless the label is added manually.
-          log("error", "orchestrate.impl.label_failed", {
+          await service.unmarkInProgress(issue);
+        } catch (rollbackErr) {
+          log("error", "orchestrate.impl.rollback_failed", {
             repo: repoKey,
-            issue: issueKey,
-            correlationId,
-            error: String(labelErr),
-            note: `worker container started but in-progress label could not be set; add the "${cfg.LABEL_IN_PROGRESS}" label to issue ${issueKey} manually to prevent a duplicate dispatch on the next poll`
+            issue: issue.number,
+            error: String(rollbackErr)
           });
         }
-      } catch (err) {
         log("error", "orchestrate.impl.error", { repo: repoKey, issue: issue.number, error: String(err) });
       }
     }

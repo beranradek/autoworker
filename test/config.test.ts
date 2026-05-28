@@ -3,7 +3,13 @@ import { getConfig } from "../src/config.js";
 
 function withEnv(env: Record<string, string>, fn: () => void) {
   const prev = process.env;
-  process.env = { ...prev, ...env };
+  const next = { ...prev };
+  // Keep tests hermetic even if the shell environment provides real credentials.
+  for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AZURE_API_KEY", "AZURE_RESOURCE_NAME", "OPENCODE_AUTH_JSON"]) {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete (next as Record<string, string | undefined>)[k];
+  }
+  process.env = { ...next, ...env };
   try {
     fn();
   } finally {

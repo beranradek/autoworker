@@ -210,6 +210,14 @@ export class GitHubIssueService implements IssueService {
     await this.addLabel(issue.number, this.cfg.LABEL_IN_REVIEW);
   }
 
+  async unmarkInReview(issue: Issue): Promise<void> {
+    await this.removeLabel(issue.number, this.cfg.LABEL_IN_REVIEW);
+  }
+
+  async unmarkInProgress(issue: Issue): Promise<void> {
+    await this.removeLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
+  }
+
   private async addLabel(issueNumber: number, label: string): Promise<void> {
     await this.octokit.issues.addLabels({
       owner: this.repo.owner,
