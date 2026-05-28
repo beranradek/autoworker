@@ -80,8 +80,8 @@ export async function runOrchestration(
         const issueKey = `${repoKey}#${issue.number}`;
         const correlationId = `${repoKey.replace("/", "-")}-${issue.number}-${Date.now()}`;
         log("info", "orchestrate.impl.accept", { repo: repoKey, issue: issueKey });
-        await service.transitionTo(issue, "in_progress");
         if (cfg.DRY_RUN) {
+          await service.transitionTo(issue, "in_progress");
           log("info", "orchestrate.impl.dry_run", { repo: repoKey, issue: issueKey, correlationId });
           accepted++;
           continue;
@@ -98,6 +98,9 @@ export async function runOrchestration(
           correlationId,
           llmModel: cfg.LLM_MODEL
         });
+        // Claim the issue only after the runner has successfully launched the worker,
+        // so a runner failure leaves the issue in "open" state and it can be retried.
+        await service.transitionTo(issue, "in_progress");
         log("info", "orchestrate.impl.dispatched", { repo: repoKey, issue: issueKey, correlationId });
         accepted++;
       } catch (err) {

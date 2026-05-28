@@ -1,6 +1,7 @@
 import { createAcaClient, createManualJob, startJob } from "../azure/client.js";
 import { log } from "../log.js";
 import type { ImplementationRunInput, ImplementationRunResult, JobRunner, PrReviewRunInput, PrReviewRunResult } from "./types.js";
+import type { ContainerAppsAPIClient } from "@azure/arm-appcontainers";
 
 export type AcaRunnerConfig = {
   subscriptionId: string;
@@ -22,31 +23,37 @@ function envId(subscriptionId: string, resourceGroup: string, envName: string): 
 function makeJobName(prefix: string, correlationId: string): string {
   const jobPrefix = `${prefix}-`;
   const maxSuffixLen = 32 - jobPrefix.length;
+  // Slice from the END so the timestamp (rightmost component) is always preserved,
+  // ensuring uniqueness even when the correlationId has a long fixed-prefix segment
+  // (e.g. "pr-review-<repo>-<issue>-<ts>") that would otherwise truncate away the
+  // distinguishing issue number.
   const safeSuffix = correlationId
     .replaceAll(/[^a-z0-9-]/gi, "-")
     .toLowerCase()
-    .slice(0, maxSuffixLen)
-    .replace(/-+$/, "");
+    .slice(-maxSuffixLen)
+    .replace(/^-+|-+$/, "");
   return `${jobPrefix}${safeSuffix}`;
 }
 
 export class AcaJobRunner implements JobRunner {
-  constructor(private readonly cfg: AcaRunnerConfig) {}
+  private readonly aca: ContainerAppsAPIClient;
+
+  constructor(private readonly cfg: AcaRunnerConfig) {
+    this.aca = createAcaClient({
+      subscriptionId: cfg.subscriptionId,
+      useManagedIdentity: cfg.useManagedIdentity,
+      tenantId: cfg.tenantId,
+      clientId: cfg.clientId,
+      clientSecret: cfg.clientSecret
+    });
+  }
 
   async runIssue(input: ImplementationRunInput): Promise<ImplementationRunResult> {
     const jobName = makeJobName(this.cfg.jobNamePrefix, input.correlationId);
 
     log("info", "aca.create_and_start", { jobName, correlationId: input.correlationId });
 
-    const aca = createAcaClient({
-      subscriptionId: this.cfg.subscriptionId,
-      useManagedIdentity: this.cfg.useManagedIdentity,
-      tenantId: this.cfg.tenantId,
-      clientId: this.cfg.clientId,
-      clientSecret: this.cfg.clientSecret
-    });
-
-    await createManualJob(aca, {
+    await createManualJob(this.aca, {
       resourceGroup: this.cfg.resourceGroup,
       location: this.cfg.location,
       environmentId: envId(this.cfg.subscriptionId, this.cfg.resourceGroup, this.cfg.environmentName),
@@ -66,7 +73,7 @@ export class AcaJobRunner implements JobRunner {
       }
     });
 
-    await startJob(aca, this.cfg.resourceGroup, jobName);
+    await startJob(this.aca, this.cfg.resourceGroup, jobName);
     return { runner: "aca", jobName };
   }
 
@@ -75,15 +82,7 @@ export class AcaJobRunner implements JobRunner {
 
     log("info", "aca.create_and_start", { jobName, correlationId: input.correlationId });
 
-    const aca = createAcaClient({
-      subscriptionId: this.cfg.subscriptionId,
-      useManagedIdentity: this.cfg.useManagedIdentity,
-      tenantId: this.cfg.tenantId,
-      clientId: this.cfg.clientId,
-      clientSecret: this.cfg.clientSecret
-    });
-
-    await createManualJob(aca, {
+    await createManualJob(this.aca, {
       resourceGroup: this.cfg.resourceGroup,
       location: this.cfg.location,
       environmentId: envId(this.cfg.subscriptionId, this.cfg.resourceGroup, this.cfg.environmentName),
@@ -107,7 +106,7 @@ export class AcaJobRunner implements JobRunner {
       }
     });
 
-    await startJob(aca, this.cfg.resourceGroup, jobName);
+    await startJob(this.aca, this.cfg.resourceGroup, jobName);
     return { runner: "aca", jobName };
   }
 }
