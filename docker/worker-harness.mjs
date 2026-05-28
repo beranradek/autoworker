@@ -257,10 +257,32 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     }
   }
 
+  let issueTitle = "";
+  let issueBodyText = "";
+  if (issueNum) {
+    const issueMetaRes = await runWithRetry(
+      "gh",
+      ["issue", "view", issueNum, "--repo", ownerRepo, "--json", "title,body"],
+      { env: ghEnv }
+    );
+    if (issueMetaRes.exitCode === 0) {
+      try {
+        const meta = JSON.parse(issueMetaRes.stdout);
+        issueTitle = String(meta.title ?? "");
+        issueBodyText = String(meta.body ?? "");
+      } catch {
+        // non-fatal
+      }
+    }
+  }
+
   const diffRes = await runWithRetry("git", ["diff", `origin/${baseBranch}...HEAD`], { cwd: repoDir, env: gitEnv });
   const diffText = diffRes.stdout || "";
   const diffPath = path.join(ARTIFACTS_DIR, "pr-diff.txt");
   fs.writeFileSync(diffPath, diffText, "utf8");
+
+  const changedFilesRes = await runWithRetry("git", ["diff", "--name-only", `origin/${baseBranch}...HEAD`], { cwd: repoDir, env: gitEnv });
+  const changedFiles = (changedFilesRes.stdout || "").trim();
 
   const DIFF_LIMIT = 8000;
   const diffTruncated = diffText.length > DIFF_LIMIT;
@@ -290,9 +312,15 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     `Pull Request: ${prUrl}`,
     `Issue: ${issueUrl}`,
     "",
+    `Issue title: ${issueTitle || "(not available)"}`,
+    "Issue description:",
+    issueBodyText || "(not available)",
+    "",
     `PR title: ${prTitle}`,
     "PR body:",
     prBody || "<empty>",
+    "",
+    `Changed files:\n${changedFiles || "<none>"}`,
     "",
     diffTruncated
       ? `Diff (truncated to ${DIFF_LIMIT} characters — full diff is in the repository; read files directly for complete context):`
