@@ -26,6 +26,7 @@ export type PrReviewRunInput = {
   anthropicApiKey?: string;
   azureApiKey?: string;
   azureResourceName?: string;
+  opencodeAuthJson?: string;
   workerImage: string;
   correlationId: string;
   llmModel?: string;

@@ -2,7 +2,7 @@ import type { Octokit } from "@octokit/rest";
 import type { IssueCandidate, RepoRef } from "./types.js";
 import { containsMention } from "./mentions.js";
 
-function normalizeLabels(labels: unknown[]): string[] {
+export function normalizeLabels(labels: unknown[]): string[] {
   const out: string[] = [];
   for (const l of labels) {
     if (typeof l === "string") out.push(l);

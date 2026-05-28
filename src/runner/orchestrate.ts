@@ -54,6 +54,7 @@ export async function runOrchestration(
           anthropicApiKey: cfg.ANTHROPIC_API_KEY,
           azureApiKey: cfg.AZURE_API_KEY,
           azureResourceName: cfg.AZURE_RESOURCE_NAME,
+          opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
           workerImage: cfg.PR_REVIEW_WORKER_IMAGE ?? cfg.WORKER_IMAGE!,
           correlationId,
           llmModel: cfg.LLM_MODEL

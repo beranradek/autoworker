@@ -4,6 +4,7 @@ import type { IssueService } from "./service.js";
 import type { RepoRef } from "../github/types.js";
 import type { Config } from "../config.js";
 import { containsMention } from "../github/mentions.js";
+import { normalizeLabels } from "../github/issues.js";
 
 export class GitHubIssueService implements IssueService {
   constructor(private octokit: Octokit, private repo: RepoRef, private cfg: Config) {}
@@ -63,6 +64,12 @@ export class GitHubIssueService implements IssueService {
         state: "closed",
         state_reason: opts?.closeReason ?? "completed"
       });
+    } else if (newState === "pr_created") {
+      // The pr_created state is set externally by the worker via the pr-created label.
+      // Calling transitionTo with this state is not supported from the orchestrator.
+      throw new Error(`transitionTo("pr_created") is not supported; the worker sets the "${this.cfg.LABEL_PR_CREATED}" label directly`);
+    } else if (newState === "open") {
+      throw new Error(`transitionTo("open") is not supported; issues revert to open by removing all state labels`);
     }
   }
 
@@ -136,12 +143,19 @@ export class GitHubIssueService implements IssueService {
   }
 
   async mergePr(pr: PrInfo): Promise<void> {
-    await this.octokit.pulls.merge({
-      owner: this.repo.owner,
-      repo: this.repo.repo,
-      pull_number: pr.number,
-      merge_method: this.cfg.PR_MERGE_METHOD
-    });
+    try {
+      await this.octokit.pulls.merge({
+        owner: this.repo.owner,
+        repo: this.repo.repo,
+        pull_number: pr.number,
+        merge_method: this.cfg.PR_MERGE_METHOD
+      });
+    } catch (err: unknown) {
+      // GitHub returns 405 when the PR is already merged. Treat that as a
+      // successful no-op so the orchestrator can still close the issue.
+      if ((err as { status?: number })?.status === 405) return;
+      throw err;
+    }
   }
 
   async isMentionedByWorker(issue: Issue): Promise<boolean> {
@@ -188,17 +202,6 @@ export class GitHubIssueService implements IssueService {
       if ((err as { status?: number })?.status !== 404) throw err;
     }
   }
-}
-
-function normalizeLabels(labels: unknown[]): string[] {
-  const out: string[] = [];
-  for (const l of labels) {
-    if (typeof l === "string") out.push(l);
-    else if (l && typeof l === "object" && "name" in l && typeof (l as Record<string, unknown>).name === "string") {
-      out.push((l as Record<string, unknown>).name as string);
-    }
-  }
-  return out;
 }
 
 function resolveState(requested: IssueState, labels: string[], cfg: Config): IssueState | null {

@@ -13,7 +13,6 @@ const schema = z.object({
 
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
   MAX_ACCEPT_PER_RUN: z.coerce.number().int().positive().default(1),
-  MAX_CONCURRENT_WORKERS: z.coerce.number().int().positive().max(20).default(5),
   DRY_RUN: z
     .enum(["0", "1", "true", "false"])
     .default("false")
@@ -80,14 +79,9 @@ const schema = z.object({
 });
 
 type RawConfig = z.infer<typeof schema>;
-export type Config = Omit<RawConfig, "GITHUB_TOKEN" | "OPENAI_API_KEY"> & {
-  GITHUB_TOKEN: string;
-  OPENAI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
-  AZURE_API_KEY?: string;
-  AZURE_RESOURCE_NAME?: string;
-  OPENCODE_AUTH_JSON?: string;
-};
+// Config narrows GITHUB_TOKEN to non-optional (validated in getConfig).
+// All other optional fields keep their schema types.
+export type Config = Omit<RawConfig, "GITHUB_TOKEN"> & { GITHUB_TOKEN: string };
 
 export function getConfig(): Config {
   const env = { ...process.env } as Record<string, string | undefined>;
