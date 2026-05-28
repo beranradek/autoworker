@@ -75,13 +75,3 @@ Switch from `opencode run` to `opencode serve` mode, communicating via HTTP SDK/
 - Multi-turn interaction is needed (e.g., agent asks clarifying questions)
 - HIL permission gates are desired inside the worker (pausing for human approval mid-task)
 
----
-
-## Reference implementation
-
-See `/home/radek/dev/ai/aiplatform/apps/worker/src/activities/frameworks/opencode.py` for a production Python implementation of this pattern. Key sections:
-- Port detection and server spawn: lines ~1000–1030
-- Config file construction: lines ~930–972
-- Session creation and message send: lines ~1076–1140
-- Completion polling: lines ~1260–1320
-- HIL permission handling: lines ~1167–1210
