@@ -63,6 +63,7 @@ RUN corepack enable && corepack prepare pnpm@10.26.1 --activate \
 
 RUN mkdir -p /usr/local/lib/autoworker
 COPY docker/worker-harness.mjs /usr/local/lib/autoworker/worker-harness.mjs
+COPY docker/lib/ /usr/local/lib/autoworker/lib/
 COPY docker/worker-run-issue.sh /usr/local/bin/autoworker-issue
 RUN chmod 755 /usr/local/lib/autoworker/worker-harness.mjs /usr/local/bin/autoworker-issue
 
