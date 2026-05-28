@@ -233,7 +233,6 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   );
   if (checkoutRes.exitCode !== 0) die("Failed to checkout PR branch", { prBranch, exitCode: checkoutRes.exitCode });
 
-  // Configure git identity so that any commits OpenCode makes inside the repo succeed.
   await runWithRetry("git", ["config", "user.email", process.env.GIT_USER_EMAIL || "autoworker@users.noreply.github.com"], {
     cwd: repoDir,
     env: gitEnv
@@ -280,11 +279,12 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     "{",
     '  "outcome": "approved" | "human_needed",',
     '  "summary": string  (markdown, 1-5 sentences visible to humans in the PR),',
-    '  "changes": string | null  (describe any corrections you made to the code, or null)',
+    '  "changes": string | null  (describe any corrections you made to the code, or null),',
+    '  "commitMessage": string | null  (suggested commit message if you made code corrections, or null)',
     "}",
     "",
     'Use "human_needed" only when the PR has fundamental issues you cannot fix programmatically.',
-    "If you make code corrections, commit them: git add -A && git commit -m \"review: <short description>\".",
+    "If you make code corrections, leave them as unstaged file changes — do NOT run git add or git commit.",
     "",
     `Pull Request: ${prUrl}`,
     `Issue: ${issueUrl || "<not-provided>"}`,
@@ -338,24 +338,26 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     // ignore
   }
 
-  // Detect only commits that OpenCode added during this review run — commits that
-  // are in local HEAD but NOT yet in origin/${prBranch}.  Using origin/${baseBranch}
-  // would include all original implementation commits and cause a spurious push on
-  // every review even when OpenCode made no changes.
-  const newCommitsRes = await runWithRetry(
-    "git",
-    ["log", `origin/${prBranch}..HEAD`, "--oneline"],
-    { cwd: repoDir, env: gitEnv }
-  );
-  const newCommits = (newCommitsRes.stdout || "").trim().split("\n").filter(Boolean);
+  const statusRes = await runWithRetry("git", ["status", "--porcelain"], { cwd: repoDir, env: gitEnv });
+  const reviewChanges = (statusRes.stdout || "").trim().split("\n").filter(Boolean);
 
   let pushedChanges = false;
-  if (newCommits.length > 0) {
-    const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
-    const gitWithAuth = (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
-    const pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", prBranch]), { cwd: repoDir, env: gitEnv });
-    pushedChanges = pushRes.exitCode === 0;
-    if (!pushedChanges) log("warn", "pr_review.push_failed", { exitCode: pushRes.exitCode });
+  if (reviewChanges.length > 0) {
+    const suggestedMsg = reviewResultFile.ok ? String(reviewResultFile.parsed?.commitMessage ?? "") : "";
+    const commitMsg = suggestedMsg || "review: apply corrections";
+    const addRes = await runWithRetry("git", ["add", "-A"], { cwd: repoDir, env: gitEnv });
+    if (addRes.exitCode !== 0) log("warn", "pr_review.git_add_failed", { exitCode: addRes.exitCode });
+    else {
+      const commitRes = await runWithRetry("git", ["commit", "-m", commitMsg], { cwd: repoDir, env: gitEnv });
+      if (commitRes.exitCode !== 0) log("warn", "pr_review.git_commit_failed", { exitCode: commitRes.exitCode });
+      else {
+        const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
+        const gitWithAuth = (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
+        const pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", prBranch]), { cwd: repoDir, env: gitEnv });
+        pushedChanges = pushRes.exitCode === 0;
+        if (!pushedChanges) log("warn", "pr_review.push_failed", { exitCode: pushRes.exitCode });
+      }
+    }
   }
 
   // A non-zero OpenCode exit means it crashed or was killed — treat as human_needed
