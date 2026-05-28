@@ -76,7 +76,8 @@ export class AcaJobRunner implements JobRunner {
         LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
         ISSUE_URL: input.issueUrl,
         ...(input.labelInProgress ? { ISSUE_LABEL_IN_PROGRESS: input.labelInProgress } : {}),
-        ...(input.labelPrCreated ? { ISSUE_LABEL_PR_CREATED: input.labelPrCreated } : {})
+        ...(input.labelPrCreated ? { ISSUE_LABEL_PR_CREATED: input.labelPrCreated } : {}),
+        CORRELATION_ID: input.correlationId
       }
     });
 

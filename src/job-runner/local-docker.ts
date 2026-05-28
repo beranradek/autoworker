@@ -53,6 +53,8 @@ export class LocalDockerJobRunner implements JobRunner {
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
+      "-e",
+      `CORRELATION_ID=${input.correlationId}`,
       input.workerImage
     );
 

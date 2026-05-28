@@ -10,6 +10,14 @@ const schema = z.object({
 
   WORKER_MENTION: z.string().default("@worker"),
   LABEL_IN_PROGRESS: z.string().default("in-progress"),
+  LABEL_FAILED: z.string().default("worker-failed"),
+
+  HEALTH_HOST: z.string().default("0.0.0.0"),
+  HEALTH_PORT: z.coerce.number().int().positive().default(8080),
+
+  WORK_HOURS_START: z.coerce.number().int().min(0).max(23).default(8),
+  WORK_HOURS_END: z.coerce.number().int().min(0).max(23).default(21),
+  WORK_HOURS_TZ: z.string().default("Europe/Prague"),
 
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
   MAX_ACCEPT_PER_RUN: z.coerce.number().int().positive().default(1),

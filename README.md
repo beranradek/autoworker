@@ -40,6 +40,19 @@ Background helper (PID + logs in `.run/`):
 DOCKER_CONFIG=/tmp/codex-docker-config docker build -t autoworker-worker:local -f docker/worker.Dockerfile .
 ```
 
+## Health / readiness endpoints
+
+When running `pnpm start` (poller), autoworker also starts a tiny HTTP server for basic monitoring:
+
+- `GET /healthz` → `{ ok: true, status: … }`
+- `GET /readyz` → `{ ok: true, status: … }`
+
+The `status` payload includes:
+
+- `processStartedAt`
+- `poll.startedAt`, `poll.finishedAt`, `poll.lastOkAt`, `poll.lastError`
+- `lastWorker` (last started worker): `correlationId`, `issue`, `issueUrl`, `runner`, `startedAt`, `finishedAt`, `outcome`, `error`
+
 ## Env vars
 
 Minimum (local):
@@ -113,6 +126,12 @@ Optional:
 - `MAX_ACCEPT_PER_RUN` (default `1`)
 - `MAX_CONCURRENT_WORKERS` (default `5`)
 - `JOB_RUNNER` (`local-docker` or `aca`)
+- `LABEL_FAILED` (default `worker-failed`)
+- `HEALTH_HOST` (default `0.0.0.0`)
+- `HEALTH_PORT` (default `8080`)
+- `WORK_HOURS_START` (default `8`)
+- `WORK_HOURS_END` (default `21`)
+- `WORK_HOURS_TZ` (default `Europe/Prague`)
 
 Azure runner (`JOB_RUNNER=aca`) additionally requires:
 
