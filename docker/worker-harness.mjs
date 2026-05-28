@@ -210,11 +210,10 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const ownerRepo = mPr[1];
   const prNum = mPr[2];
 
-  let issueNum = "";
-  if (issueUrl) {
-    const mIssue = issueUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/([0-9]+)/);
-    if (mIssue) issueNum = mIssue[3];
-  }
+  if (!issueUrl) die("ISSUE_URL is required for pr-review mode (needed for label management)");
+  const mIssue = issueUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/([0-9]+)/);
+  if (!mIssue) die(`ISSUE_URL could not be parsed for pr-review: ${issueUrl}`);
+  const issueNum = mIssue[3];
 
   log("info", "harness.pr_review.start", { prUrl, issueUrl, prBranch, baseBranch, llmModel: LLM_MODEL });
 
@@ -263,6 +262,8 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const diffPath = path.join(ARTIFACTS_DIR, "pr-diff.txt");
   fs.writeFileSync(diffPath, diffText, "utf8");
 
+  const DIFF_LIMIT = 8000;
+  const diffTruncated = diffText.length > DIFF_LIMIT;
   const reviewPrompt = [
     "You are an AI code reviewer running inside an ephemeral Docker container.",
     "",
@@ -278,23 +279,25 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     "At the end, write a JSON file at .autoworker/review-result.json:",
     "{",
     '  "outcome": "approved" | "human_needed",',
-    '  "summary": string  (markdown, 1-5 sentences visible to humans in the PR),',
-    '  "changes": string | null  (describe any corrections you made to the code, or null),',
-    '  "commitMessage": string | null  (suggested commit message if you made code corrections, or null)',
+    '  "summary": string  (markdown, 1-5 sentences — your overall review verdict visible to humans in the PR comment),',
+    '  "changes": string | null  (only if you edited files: describe exactly what code corrections you made; otherwise null),',
+    '  "commitMessage": string | null  (only if you edited files: a short git commit message for your corrections; otherwise null)',
     "}",
     "",
     'Use "human_needed" only when the PR has fundamental issues you cannot fix programmatically.',
     "If you make code corrections, leave them as unstaged file changes — do NOT run git add or git commit.",
     "",
     `Pull Request: ${prUrl}`,
-    `Issue: ${issueUrl || "<not-provided>"}`,
+    `Issue: ${issueUrl}`,
     "",
     `PR title: ${prTitle}`,
     "PR body:",
     prBody || "<empty>",
     "",
-    "Diff:",
-    diffText.slice(0, 8000)
+    diffTruncated
+      ? `Diff (truncated to ${DIFF_LIMIT} characters — full diff is in the repository; read files directly for complete context):`
+      : "Diff:",
+    diffText.slice(0, DIFF_LIMIT)
   ].join("\n");
 
   const reviewPromptPath = path.join(ARTIFACTS_DIR, "review-prompt.txt");
@@ -332,19 +335,29 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
 
   const reviewResultPath = path.join(repoDir, ".autoworker", "review-result.json");
   const reviewResultFile = readJsonFile(reviewResultPath);
+
+  // Run git status BEFORE removing .autoworker/ so we can detect whether the AI
+  // accidentally staged it (it will appear as staged deletion after rmSync).
+  // We then strip any .autoworker/ entries from the change list so harness metadata
+  // never ends up in the review correction commit.
+  const statusRes = await runWithRetry("git", ["status", "--porcelain"], { cwd: repoDir, env: gitEnv });
   try {
     fs.rmSync(path.join(repoDir, ".autoworker"), { recursive: true, force: true });
   } catch {
     // ignore
   }
 
-  const statusRes = await runWithRetry("git", ["status", "--porcelain"], { cwd: repoDir, env: gitEnv });
-  const reviewChanges = (statusRes.stdout || "").trim().split("\n").filter(Boolean);
+  // Exclude any .autoworker/ entries — they are harness metadata, not reviewer corrections.
+  const reviewChanges = (statusRes.stdout || "").trim().split("\n").filter(
+    (line) => line && !line.match(/\.autoworker\//)
+  );
 
   let pushedChanges = false;
   if (reviewChanges.length > 0) {
     const suggestedMsg = reviewResultFile.ok ? String(reviewResultFile.parsed?.commitMessage ?? "") : "";
     const commitMsg = suggestedMsg || "review: apply corrections";
+    // git add -A after rmSync so .autoworker/ deletion is staged and then the
+    // exclusion via .gitignore or the filtered check above keeps it clean.
     const addRes = await runWithRetry("git", ["add", "-A"], { cwd: repoDir, env: gitEnv });
     if (addRes.exitCode !== 0) log("warn", "pr_review.git_add_failed", { exitCode: addRes.exitCode });
     else {
@@ -369,8 +382,16 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const changes = reviewResultFile.ok ? (reviewResultFile.parsed?.changes ?? null) : null;
 
   if (ownerRepo && prNum) {
-    const commentParts = ["## Review", "", summary || "(no summary)"];
-    if (changes) commentParts.push("", "**Changes made:**", changes);
+    const outcomeLabel = outcome === "approved" ? "Approved" : "Human review needed";
+    const commentParts = [`## Review — ${outcomeLabel}`, "", summary || "(no summary)"];
+    if (changes) {
+      commentParts.push("", "**Corrections applied by reviewer:**", changes);
+      if (pushedChanges) {
+        commentParts.push("", "_These corrections have been committed and pushed to this PR branch._");
+      } else {
+        commentParts.push("", "_Warning: corrections could not be pushed to this branch._");
+      }
+    }
     const commentBody = commentParts.join("\n");
     await runWithRetry("gh", ["pr", "comment", prNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
   }
