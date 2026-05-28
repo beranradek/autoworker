@@ -185,4 +185,24 @@ describe("LocalDockerJobRunner", () => {
     expect(calls[0].opts.detached).toBe(true);
     expect(calls[0].args).not.toContain("--rm");
   });
+
+  it("runPrReview passes OPENCODE_AUTH_JSON when subscription auth is provided", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/42",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      opencodeAuthJson: '{"anthropic":{"type":"oauth"}}',
+      llmModel: "anthropic/claude-opus-4-7",
+      workerImage: "img:tag",
+      correlationId: "corr-42"
+    });
+
+    expect(calls[0].args.join(" ")).toContain(`OPENCODE_AUTH_JSON={"anthropic":{"type":"oauth"}}`);
+    expect(calls[0].args.join(" ")).not.toContain("OPENAI_API_KEY");
+  });
 });

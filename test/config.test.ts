@@ -139,4 +139,71 @@ describe("getConfig", () => {
       }
     );
   });
+
+  it("STEP_PR_MERGE defaults to false", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true" },
+      () => {
+        expect(getConfig().STEP_PR_MERGE).toBe(false);
+      }
+    );
+  });
+
+  it("STEP_PR_REVIEW defaults to true", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true" },
+      () => {
+        expect(getConfig().STEP_PR_REVIEW).toBe(true);
+      }
+    );
+  });
+
+  it("STEP_IMPLEMENTATION defaults to true", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true" },
+      () => {
+        expect(getConfig().STEP_IMPLEMENTATION).toBe(true);
+      }
+    );
+  });
+
+  it("parses STEP_PR_MERGE=true from env string", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true", STEP_PR_MERGE: "true" },
+      () => {
+        expect(getConfig().STEP_PR_MERGE).toBe(true);
+      }
+    );
+  });
+
+  it("has correct default label values for new orchestration labels", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true" },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.LABEL_PR_CREATED).toBe("pr-created");
+        expect(cfg.LABEL_PR_REVIEWED).toBe("pr-reviewed");
+        expect(cfg.LABEL_PR_REVIEW_DISPATCHED).toBe("pr-review-dispatched");
+        expect(cfg.LABEL_HUMAN_NEEDED).toBe("human-needed");
+      }
+    );
+  });
+
+  it("PR_MERGE_METHOD defaults to squash", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true" },
+      () => {
+        expect(getConfig().PR_MERGE_METHOD).toBe("squash");
+      }
+    );
+  });
+
+  it("rejects invalid PR_MERGE_METHOD value", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true", PR_MERGE_METHOD: "fast-forward" },
+      () => {
+        expect(() => getConfig()).toThrow();
+      }
+    );
+  });
 });

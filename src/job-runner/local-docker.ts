@@ -56,6 +56,7 @@ export class LocalDockerJobRunner implements JobRunner {
       detached: true
     });
     child.unref();
+    if (typeof logFd === "number") fs.closeSync(logFd);
 
     return Promise.resolve({ runner: "local-docker" });
   }
@@ -101,6 +102,7 @@ export class LocalDockerJobRunner implements JobRunner {
       detached: true
     });
     child.unref();
+    if (typeof logFd === "number") fs.closeSync(logFd);
 
     return Promise.resolve({ runner: "local-docker" });
   }
