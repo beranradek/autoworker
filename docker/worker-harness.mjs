@@ -627,6 +627,10 @@ async function main() {
         await runWithRetry("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", body], { env: ghEnv });
         return;
       }
+      // Remove in-progress so the issue is not permanently stuck. No rejection label is
+      // added here — the issue reverts to open and can be re-dispatched or handled manually.
+      const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
+      await runWithRetry("gh", ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel], { env: ghEnv });
       await runWithRetry(
         "gh",
         ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", `Worker finished but produced no git changes.`],
