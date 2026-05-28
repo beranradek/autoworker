@@ -189,6 +189,76 @@ describe("LocalDockerJobRunner", () => {
     expect(calls[0].args).not.toContain("--rm");
   });
 
+  it("runIssue includes autoworker.managed=true label", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1"
+    });
+
+    const args = calls[0].args as string[];
+    const labelIdx = args.findIndex((a, i) => a === "--label" && args[i + 1] === "autoworker.managed=true");
+    expect(labelIdx).toBeGreaterThan(-1);
+  });
+
+  it("runIssue includes autoworker.correlationId label matching correlationId", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "my-corr-id"
+    });
+
+    const args = calls[0].args as string[];
+    const labelIdx = args.findIndex((a, i) => a === "--label" && args[i + 1] === "autoworker.correlationId=my-corr-id");
+    expect(labelIdx).toBeGreaterThan(-1);
+  });
+
+  it("runPrReview includes autoworker.managed=true label", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/42",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "pr-corr-id"
+    });
+
+    const args = calls[0].args as string[];
+    const labelIdx = args.findIndex((a, i) => a === "--label" && args[i + 1] === "autoworker.managed=true");
+    expect(labelIdx).toBeGreaterThan(-1);
+  });
+
+  it("runPrReview includes autoworker.correlationId label matching correlationId", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/42",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "pr-corr-id"
+    });
+
+    const args = calls[0].args as string[];
+    const labelIdx = args.findIndex((a, i) => a === "--label" && args[i + 1] === "autoworker.correlationId=pr-corr-id");
+    expect(labelIdx).toBeGreaterThan(-1);
+  });
+
   it("runPrReview passes OPENCODE_AUTH_JSON when subscription auth is provided", async () => {
     const { calls, spawnStub } = makeSpawnStub();
     const runner = new LocalDockerJobRunner(spawnStub);
