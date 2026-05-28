@@ -20,7 +20,7 @@ function envId(subscriptionId: string, resourceGroup: string, envName: string): 
   return `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.App/managedEnvironments/${envName}`;
 }
 
-function makeJobName(prefix: string, correlationId: string): string {
+export function makeJobName(prefix: string, correlationId: string): string {
   const jobPrefix = `${prefix}-`;
   const maxSuffixLen = 32 - jobPrefix.length;
   if (maxSuffixLen <= 0) {
