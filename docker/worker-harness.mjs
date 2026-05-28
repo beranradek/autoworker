@@ -200,6 +200,13 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
   );
   if (checkoutRes.exitCode !== 0) die("Failed to checkout PR branch", { prBranch, exitCode: checkoutRes.exitCode });
 
+  // Configure git identity so that any commits OpenCode makes inside the repo succeed.
+  await runWithRetry("git", ["config", "user.email", process.env.GIT_USER_EMAIL || "autoworker@users.noreply.github.com"], {
+    cwd: repoDir,
+    env: gitEnv
+  });
+  await runWithRetry("git", ["config", "user.name", process.env.GIT_USER_NAME || "autoworker"], { cwd: repoDir, env: gitEnv });
+
   await runWithRetry("git", ["fetch", "origin", baseBranch], { cwd: repoDir, env: gitEnv });
 
   const prMetaRes = await runWithRetry(
@@ -329,9 +336,13 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
     // ignore
   }
 
+  // Detect only commits that OpenCode added during this review run — commits that
+  // are in local HEAD but NOT yet in origin/${prBranch}.  Using origin/${baseBranch}
+  // would include all original implementation commits and cause a spurious push on
+  // every review even when OpenCode made no changes.
   const newCommitsRes = await runWithRetry(
     "git",
-    ["log", `origin/${baseBranch}..HEAD`, "--oneline"],
+    ["log", `origin/${prBranch}..HEAD`, "--oneline"],
     { cwd: repoDir, env: gitEnv }
   );
   const newCommits = (newCommitsRes.stdout || "").trim().split("\n").filter(Boolean);
@@ -345,7 +356,9 @@ async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
     if (!pushedChanges) log("warn", "pr_review.push_failed", { exitCode: pushRes.exitCode });
   }
 
-  const outcome = reviewResultFile.ok && (reviewResultFile.parsed?.outcome === "approved" || reviewResultFile.parsed?.outcome === "human_needed")
+  // A non-zero OpenCode exit means it crashed or was killed — treat as human_needed
+  // regardless of any result file that might have been partially written.
+  const outcome = (ocExitCode === 0) && reviewResultFile.ok && (reviewResultFile.parsed?.outcome === "approved" || reviewResultFile.parsed?.outcome === "human_needed")
     ? reviewResultFile.parsed.outcome
     : "human_needed";
   const summary = reviewResultFile.ok ? String(reviewResultFile.parsed?.summary ?? "") : "";
@@ -618,7 +631,9 @@ async function main() {
   const changes = statusRes.stdout.trim().split("\n").filter(Boolean);
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "git-status-porcelain.txt"), statusRes.stdout, "utf8");
 
-  const diffStatRes = await runWithRetry("git", ["diff", "--stat"], { cwd: repoDir, env: gitEnv });
+  // Use HEAD to include both staged and unstaged changes relative to last commit,
+  // since OpenCode may have left changes in the index, the working tree, or both.
+  const diffStatRes = await runWithRetry("git", ["diff", "--stat", "HEAD"], { cwd: repoDir, env: gitEnv });
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "git-diff-stat.txt"), diffStatRes.stdout, "utf8");
 
   if (changes.length === 0) {
@@ -759,8 +774,9 @@ async function main() {
   }
   if (!prTitle) prTitle = issueTitle ? issueTitle : `Fix #${issueNum}`;
 
+  // Preserve markdown newlines in the description so formatting is intact in the PR body.
   const agentDescription = resultFile.ok && resultFile.parsed?.status === "success"
-    ? cleanSingleLine(resultFile.parsed?.description ?? "", 2000)
+    ? String(resultFile.parsed?.description ?? "").slice(0, 2000)
     : "";
 
   const prBody = [
