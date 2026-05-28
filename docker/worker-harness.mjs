@@ -158,6 +158,221 @@ async function runWithRetry(cmd, args, opts) {
   }
 }
 
+async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR) {
+  const prUrl = process.env.PR_URL || "";
+  const prBranch = process.env.PR_BRANCH || "";
+  const baseBranch = process.env.BASE_BRANCH || "main";
+  const issueUrl = process.env.ISSUE_URL || "";
+  const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+  const AZURE_API_KEY = process.env.AZURE_API_KEY || "";
+  const AZURE_RESOURCE_NAME = process.env.AZURE_RESOURCE_NAME || "";
+  const OPENCODE_AUTH_JSON = process.env.OPENCODE_AUTH_JSON || "";
+  const LLM_MODEL = process.env.LLM_MODEL || "openai/gpt-5-mini";
+
+  if (!prUrl) die("PR_URL is required for pr-review mode");
+  if (!prBranch) die("PR_BRANCH is required for pr-review mode");
+
+  const mPr = prUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/([0-9]+)/);
+  if (!mPr) die(`Unsupported PR_URL format: ${prUrl}`);
+  const ownerRepo = mPr[1];
+  const prNum = mPr[2];
+
+  let issueNum = "";
+  if (issueUrl) {
+    const mIssue = issueUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/([0-9]+)/);
+    if (mIssue) issueNum = mIssue[3];
+  }
+
+  fs.rmSync(CLONE_DIR, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(CLONE_DIR), { recursive: true });
+  const cloneRes = await runWithRetry("gh", ["repo", "clone", ownerRepo, CLONE_DIR], { env: ghEnv });
+  if (cloneRes.exitCode !== 0) die("Failed to clone repo for pr-review", { exitCode: cloneRes.exitCode });
+
+  const repoDir = CLONE_DIR;
+  const gitEnv = { ...process.env };
+
+  const checkoutRes = await runWithRetry(
+    "git",
+    ["checkout", "-b", prBranch, `origin/${prBranch}`],
+    { cwd: repoDir, env: gitEnv }
+  );
+  if (checkoutRes.exitCode !== 0) die("Failed to checkout PR branch", { prBranch, exitCode: checkoutRes.exitCode });
+
+  await runWithRetry("git", ["fetch", "origin", baseBranch], { cwd: repoDir, env: gitEnv });
+
+  const prMetaRes = await runWithRetry(
+    "gh",
+    ["pr", "view", prNum, "--repo", ownerRepo, "--json", "title,body,additions,deletions"],
+    { env: ghEnv }
+  );
+  let prTitle = "";
+  let prBody = "";
+  if (prMetaRes.exitCode === 0) {
+    try {
+      const meta = JSON.parse(prMetaRes.stdout);
+      prTitle = String(meta.title ?? "");
+      prBody = String(meta.body ?? "");
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const diffRes = await runWithRetry("git", ["diff", `origin/${baseBranch}...HEAD`], { cwd: repoDir, env: gitEnv });
+  const diffText = diffRes.stdout || "";
+  const diffPath = path.join(ARTIFACTS_DIR, "pr-diff.txt");
+  fs.writeFileSync(diffPath, diffText, "utf8");
+
+  const reviewPrompt = [
+    "You are an AI code reviewer running inside an ephemeral Docker container.",
+    "",
+    "Task: review the pull request described below. You have the full repository checked out on the PR branch.",
+    "",
+    "Hard constraints:",
+    "- Do NOT run git push or gh commands.",
+    "- Do NOT modify git remotes or auth configuration.",
+    "- Do NOT access GitHub credentials.",
+    "",
+    "You MAY read any files in the repository and run build/test commands to verify correctness.",
+    "",
+    "At the end, write a JSON file at .autoworker/review-result.json:",
+    "{",
+    '  "outcome": "approved" | "human_needed",',
+    '  "summary": string  (markdown, 1-5 sentences visible to humans in the PR),',
+    '  "changes": string | null  (describe any corrections you made to the code, or null)',
+    "}",
+    "",
+    'Use "human_needed" only when the PR has fundamental issues you cannot fix programmatically.',
+    "If you make code corrections, commit them: git add -A && git commit -m \"review: <short description>\".",
+    "",
+    `Pull Request: ${prUrl}`,
+    `Issue: ${issueUrl || "<not-provided>"}`,
+    "",
+    `PR title: ${prTitle}`,
+    "PR body:",
+    prBody || "<empty>",
+    "",
+    "Diff:",
+    diffText.slice(0, 8000)
+  ].join("\n");
+
+  const reviewPromptPath = path.join(ARTIFACTS_DIR, "review-prompt.txt");
+  fs.writeFileSync(reviewPromptPath, reviewPrompt, "utf8");
+
+  let opencodeDataHome;
+  if (OPENCODE_AUTH_JSON) {
+    opencodeDataHome = writeOpencodeAuth(OPENCODE_AUTH_JSON, process.env.HOME || "/home/node");
+  }
+
+  const opencodeEnv = {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    USER: process.env.USER,
+    SHELL: process.env.SHELL,
+    LANG: process.env.LANG,
+    LC_ALL: process.env.LC_ALL,
+    TERM: process.env.TERM,
+    TMPDIR: process.env.TMPDIR,
+    CI: process.env.CI,
+    CHROME_BIN: process.env.CHROME_BIN,
+    XDG_DATA_HOME: opencodeDataHome || process.env.XDG_DATA_HOME || undefined,
+    OPENAI_API_KEY: OPENAI_API_KEY || undefined,
+    ANTHROPIC_API_KEY: ANTHROPIC_API_KEY || undefined,
+    AZURE_API_KEY: AZURE_API_KEY || undefined,
+    AZURE_RESOURCE_NAME: AZURE_RESOURCE_NAME || undefined,
+    LLM_MODEL
+  };
+
+  log("info", "opencode.review.start", { model: LLM_MODEL, dir: repoDir });
+  const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
+  const reviewLogPath = path.join(ARTIFACTS_DIR, "opencode-review.log");
+  const ocChild = spawn(
+    "opencode",
+    ["run", "--format", "json", "--model", LLM_MODEL, "--dangerously-skip-permissions", "--dir", repoDir, reviewPrompt],
+    { env: opencodeEnv, stdio: ["ignore", "pipe", "pipe"] }
+  );
+
+  const ocLogStream = fs.createWriteStream(reviewLogPath, { flags: "a" });
+  ocChild.stdout?.on("data", (b) => {
+    const s = String(b);
+    ocLogStream.write(s);
+    process.stderr.write(s);
+  });
+  ocChild.stderr?.on("data", (b) => {
+    const s = String(b);
+    ocLogStream.write(s);
+    process.stderr.write(s);
+  });
+
+  const ocTimeout =
+    opencodeTimeoutMs > 0
+      ? setTimeout(() => {
+          log("warn", "opencode.review.timeout", { timeoutMs: opencodeTimeoutMs });
+          ocChild.kill("SIGKILL");
+        }, opencodeTimeoutMs)
+      : null;
+
+  const ocExitCode = await new Promise((resolve, reject) => {
+    ocChild.on("error", reject);
+    ocChild.on("close", (code) => resolve(code ?? 0));
+  });
+  if (ocTimeout) clearTimeout(ocTimeout);
+  ocLogStream.end();
+  log(ocExitCode === 0 ? "info" : "warn", "opencode.review.done", { exitCode: ocExitCode });
+
+  const reviewResultPath = path.join(repoDir, ".autoworker", "review-result.json");
+  const reviewResultFile = readJsonFile(reviewResultPath);
+  try {
+    fs.rmSync(path.join(repoDir, ".autoworker"), { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+
+  const newCommitsRes = await runWithRetry(
+    "git",
+    ["log", `origin/${baseBranch}..HEAD`, "--oneline"],
+    { cwd: repoDir, env: gitEnv }
+  );
+  const newCommits = (newCommitsRes.stdout || "").trim().split("\n").filter(Boolean);
+
+  let pushedChanges = false;
+  if (newCommits.length > 0) {
+    const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
+    const gitWithAuth = (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
+    const pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", prBranch]), { cwd: repoDir, env: gitEnv });
+    pushedChanges = pushRes.exitCode === 0;
+    if (!pushedChanges) log("warn", "pr_review.push_failed", { exitCode: pushRes.exitCode });
+  }
+
+  const outcome = reviewResultFile.ok && (reviewResultFile.parsed?.outcome === "approved" || reviewResultFile.parsed?.outcome === "human_needed")
+    ? reviewResultFile.parsed.outcome
+    : "human_needed";
+  const summary = reviewResultFile.ok ? String(reviewResultFile.parsed?.summary ?? "") : "";
+  const changes = reviewResultFile.ok ? (reviewResultFile.parsed?.changes ?? null) : null;
+
+  if (ownerRepo && prNum) {
+    const commentParts = ["## Review", "", summary || "(no summary)"];
+    if (changes) commentParts.push("", "**Changes made:**", changes);
+    const commentBody = commentParts.join("\n");
+    await runWithRetry("gh", ["pr", "comment", prNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
+  }
+
+  if (ownerRepo && issueNum) {
+    const inReviewLabel = process.env.ISSUE_LABEL_IN_REVIEW || "in-review";
+    const prReviewedLabel = process.env.ISSUE_LABEL_PR_REVIEWED || "pr-reviewed";
+    const humanNeededLabel = process.env.ISSUE_LABEL_HUMAN_NEEDED || "human-needed";
+    const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo,
+      "--remove-label", inReviewLabel,
+      "--add-label", prReviewedLabel];
+    if (outcome === "human_needed") editArgs.push("--add-label", humanNeededLabel);
+    await runWithRetry("gh", editArgs, { env: ghEnv });
+    log("info", "issue.labels.updated", { removed: inReviewLabel, added: prReviewedLabel, outcome });
+  }
+
+  log("info", "harness.pr_review.done", { prNum, outcome, pushedChanges });
+}
+
 async function main() {
   const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -173,6 +388,8 @@ async function main() {
   if (AZURE_API_KEY && !AZURE_RESOURCE_NAME) {
     die("AZURE_RESOURCE_NAME is required when AZURE_API_KEY is set");
   }
+
+  const WORKER_MODE = process.env.WORKER_MODE || "implementation";
 
   const WORKDIR = process.env.WORKDIR || "/workspace";
   const CLONE_DIR = process.env.CLONE_DIR || path.join(WORKDIR, "repo");
@@ -221,8 +438,14 @@ async function main() {
     cloneDir: CLONE_DIR,
     artifactsDir: ARTIFACTS_DIR,
     llmModel: LLM_MODEL,
+    workerMode: WORKER_MODE,
     verifyCmdConfigured: Boolean(process.env.VERIFY_CMD)
   });
+
+  if (WORKER_MODE === "pr-review") {
+    await runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR);
+    return;
+  }
 
   if (ownerRepo) {
     // Fresh clone every run to avoid cross-run state.
@@ -412,7 +635,7 @@ async function main() {
           question: process.env.REJECT_LABEL_QUESTION || "question"
         };
         const label = reasonToLabel[rejectReason] || "";
-        const acceptedLabel = process.env.ISSUE_LABEL_ACCEPTED || "accepted";
+        const acceptedLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
         const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel];
         if (label) editArgs.push("--add-label", label);
         await runWithRetry("gh", editArgs, { env: ghEnv });
@@ -450,7 +673,7 @@ async function main() {
       const label = reasonToLabel[rejectReason] || "";
       log("info", "agent.result.rejected", { rejectReason, label });
       if (ownerRepo && issueNum) {
-        const acceptedLabel = process.env.ISSUE_LABEL_ACCEPTED || "accepted";
+        const acceptedLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
         const editArgs = ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", acceptedLabel];
         if (label) editArgs.push("--add-label", label);
         await runWithRetry("gh", editArgs, { env: ghEnv });
@@ -535,10 +758,15 @@ async function main() {
     prTitle = cleanSingleLine(resultFile.parsed?.suggestedPrTitle ?? "", 120);
   }
   if (!prTitle) prTitle = issueTitle ? issueTitle : `Fix #${issueNum}`;
+
+  const agentDescription = resultFile.ok && resultFile.parsed?.status === "success"
+    ? cleanSingleLine(resultFile.parsed?.description ?? "", 2000)
+    : "";
+
   const prBody = [
     issueNum ? `Fixes #${issueNum}` : "",
-    "",
-    "Automation details:",
+    agentDescription ? `\n## Summary\n\n${agentDescription}` : "",
+    "\n---\nAutomation details:",
     `- Branch: ${branchName}`,
     diffStatRes.stdout ? `- Diff stat:\n\n\`\`\`\n${diffStatRes.stdout.trim()}\n\`\`\`` : ""
   ]
@@ -557,14 +785,22 @@ async function main() {
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "pr-url.txt"), prUrl, "utf8");
   log("info", "pr.create.done", { prUrl });
 
+  if (ownerRepo && issueNum) {
+    const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
+    const prCreatedLabel = process.env.ISSUE_LABEL_PR_CREATED || "pr-created";
+    await runWithRetry(
+      "gh",
+      ["issue", "edit", issueNum, "--repo", ownerRepo,
+       "--remove-label", inProgressLabel,
+       "--add-label", prCreatedLabel],
+      { env: ghEnv }
+    );
+    log("info", "issue.labels.updated", { removed: inProgressLabel, added: prCreatedLabel });
+  }
+
   // Comment back to the issue deterministically.
   if (ownerRepo && issueNum) {
-    let extra = "";
-    if (resultFile.ok && String(resultFile.parsed?.status ?? "") === "success") {
-      const desc = cleanSingleLine(resultFile.parsed?.description ?? "", 1200);
-      if (desc) extra = `\n\nResult:\n${desc}`;
-    }
-    const commentBody = `PR: ${prUrl}${extra}`;
+    const commentBody = `PR: ${prUrl}`;
     await runWithRetry("gh", ["issue", "comment", issueNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
     log("info", "issue.commented", { issueNum, prUrl });
   }
