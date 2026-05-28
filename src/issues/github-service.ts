@@ -69,7 +69,11 @@ export class GitHubIssueService implements IssueService {
         await this.addLabel(issue.number, this.cfg.LABEL_HUMAN_NEEDED);
       }
     } else if (newState === "closed") {
-      // Remove the pr-reviewed label (and any residual labels) so the issue is clean after close.
+      // Remove all state labels so the issue is clean after close.
+      // The in-progress and pr-created labels are normally removed earlier in the pipeline,
+      // but we defensively clean them here in case the issue was manually labelled out-of-order.
+      await this.removeLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
+      await this.removeLabel(issue.number, this.cfg.LABEL_PR_CREATED);
       await this.removeLabel(issue.number, this.cfg.LABEL_PR_REVIEWED);
       await this.removeLabel(issue.number, this.cfg.LABEL_HUMAN_NEEDED);
       await this.octokit.issues.update({
@@ -154,6 +158,9 @@ export class GitHubIssueService implements IssueService {
     }
 
     if (openPrs.length === 0) return null;
+    // When multiple open PRs are linked, return the last one found (most recently linked).
+    // Having more than one open PR for a single issue is abnormal; the worker always opens
+    // exactly one PR per issue, so this is a safety fallback rather than a common path.
     return openPrs[openPrs.length - 1]!;
   }
 

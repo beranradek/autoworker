@@ -232,6 +232,17 @@ describe("GitHubIssueService – transitionTo", () => {
     );
   });
 
+  it("'closed': defensively removes all state labels including in-progress and pr-created", async () => {
+    const octokit = makeOctokit();
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    await svc.transitionTo(makeIssue({ number: 7 }), "closed");
+    const removeCalls = (octokit.issues.removeLabel.mock.calls as any[][]).map((args) => args[0].name);
+    expect(removeCalls).toContain("in-progress");
+    expect(removeCalls).toContain("pr-created");
+    expect(removeCalls).toContain("pr-reviewed");
+    expect(removeCalls).toContain("human-needed");
+  });
+
   it("'closed' with closeReason 'not_planned': uses state_reason 'not_planned'", async () => {
     const octokit = makeOctokit();
     const svc = new GitHubIssueService(octokit, repo, makeConfig());
