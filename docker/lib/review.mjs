@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { log, die, sanitizeUserContent, readJsonFile, writeOpencodeAuth, runWithRetry, spawnOpencode } from "./common.mjs";
+import { log, die, sanitizeUserContent, readJsonFile, writeOpencodeAuth, runWithRetry, spawnOpencode, buildOpencodeEnv, buildGitWithAuth } from "./common.mjs";
 
 export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const prUrl = process.env.PR_URL || "";
@@ -156,24 +156,7 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     opencodeDataHome = writeOpencodeAuth(OPENCODE_AUTH_JSON, process.env.HOME || "/home/node");
   }
 
-  const opencodeEnv = {
-    PATH: process.env.PATH,
-    HOME: process.env.HOME,
-    USER: process.env.USER,
-    SHELL: process.env.SHELL,
-    LANG: process.env.LANG,
-    LC_ALL: process.env.LC_ALL,
-    TERM: process.env.TERM,
-    TMPDIR: process.env.TMPDIR,
-    CI: process.env.CI,
-    CHROME_BIN: process.env.CHROME_BIN,
-    XDG_DATA_HOME: opencodeDataHome || process.env.XDG_DATA_HOME || undefined,
-    OPENAI_API_KEY: OPENAI_API_KEY || undefined,
-    ANTHROPIC_API_KEY: ANTHROPIC_API_KEY || undefined,
-    AZURE_API_KEY: AZURE_API_KEY || undefined,
-    AZURE_RESOURCE_NAME: AZURE_RESOURCE_NAME || undefined,
-    LLM_MODEL
-  };
+  const opencodeEnv = buildOpencodeEnv({ OPENAI_API_KEY, ANTHROPIC_API_KEY, AZURE_API_KEY, AZURE_RESOURCE_NAME, LLM_MODEL, opencodeDataHome });
 
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
   const reviewLogPath = path.join(ARTIFACTS_DIR, "opencode-review.log");
@@ -205,8 +188,7 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
       const commitRes = await runWithRetry("git", ["commit", "-m", commitMsg], { cwd: repoDir, env: gitEnv });
       if (commitRes.exitCode !== 0) log("warn", "pr_review.git_commit_failed", { exitCode: commitRes.exitCode });
       else {
-        const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
-        const gitWithAuth = (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
+        const gitWithAuth = buildGitWithAuth(GH_TOKEN);
         const pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", prBranch]), { cwd: repoDir, env: gitEnv });
         pushedChanges = pushRes.exitCode === 0;
         if (!pushedChanges) log("warn", "pr_review.push_failed", { exitCode: pushRes.exitCode });

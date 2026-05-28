@@ -25,7 +25,7 @@ export function redact(str) {
     .replaceAll(/\b(github_pat_[A-Za-z0-9_]{20,})\b/g, "***")
     .replaceAll(/(sk-ant-[A-Za-z0-9_-]{20,})/g, "***")
     .replaceAll(/\b(sk-[A-Za-z0-9]{20,})\b/g, "***")
-    .replaceAll(/\bAUTHORIZATION: basic [A-Za-z0-9+/=]{20,}\b/g, "AUTHORIZATION: basic ***")
+    .replaceAll(/\bAUTHORIZATION: basic \S+/g, "AUTHORIZATION: basic ***")
     .replaceAll(/\b(password|passwd|secret|token|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key|auth[_-]?key)[=:]\s*\S+/gi, "$1=***");
 }
 
@@ -166,6 +166,32 @@ export function resolveRejectionLabel(rejectReason) {
     question: process.env.REJECT_LABEL_QUESTION || "question"
   };
   return reasonToLabel[rejectReason] || reasonToLabel.wontfix;
+}
+
+export function buildOpencodeEnv({ OPENAI_API_KEY, ANTHROPIC_API_KEY, AZURE_API_KEY, AZURE_RESOURCE_NAME, LLM_MODEL, opencodeDataHome }) {
+  return {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    USER: process.env.USER,
+    SHELL: process.env.SHELL,
+    LANG: process.env.LANG,
+    LC_ALL: process.env.LC_ALL,
+    TERM: process.env.TERM,
+    TMPDIR: process.env.TMPDIR,
+    CI: process.env.CI,
+    CHROME_BIN: process.env.CHROME_BIN,
+    XDG_DATA_HOME: opencodeDataHome || process.env.XDG_DATA_HOME || undefined,
+    OPENAI_API_KEY: OPENAI_API_KEY || undefined,
+    ANTHROPIC_API_KEY: ANTHROPIC_API_KEY || undefined,
+    AZURE_API_KEY: AZURE_API_KEY || undefined,
+    AZURE_RESOURCE_NAME: AZURE_RESOURCE_NAME || undefined,
+    LLM_MODEL
+  };
+}
+
+export function buildGitWithAuth(ghToken) {
+  const authHeader = Buffer.from(`x-access-token:${ghToken}`, "utf8").toString("base64");
+  return (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
 }
 
 export async function spawnOpencode({ prompt, repoDir, logPath, env, timeoutMs }) {

@@ -3,13 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   log, die, sanitizeUserContent, sanitizeBranchPart, cleanSingleLine,
-  readJsonFile, writeOpencodeAuth, run, runWithRetry, resolveRejectionLabel, spawnOpencode, redact
+  readJsonFile, writeOpencodeAuth, run, runWithRetry, resolveRejectionLabel, spawnOpencode, redact,
+  buildOpencodeEnv, buildGitWithAuth
 } from "./common.mjs";
 
 export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR, cfg) {
   const {
     GH_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY, AZURE_API_KEY, AZURE_RESOURCE_NAME,
-    OPENCODE_AUTH_JSON, LLM_MODEL, ownerRepo, issueNum, issueUrl, issueText, ISSUE_REPO
+    OPENCODE_AUTH_JSON, LLM_MODEL, ownerRepo, issueNum, issueUrl, issueText
   } = cfg;
 
   if (ownerRepo) {
@@ -101,24 +102,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   }
 
   const opencodeLogPath = path.join(ARTIFACTS_DIR, "opencode.log");
-  const opencodeEnv = {
-    PATH: process.env.PATH,
-    HOME: process.env.HOME,
-    USER: process.env.USER,
-    SHELL: process.env.SHELL,
-    LANG: process.env.LANG,
-    LC_ALL: process.env.LC_ALL,
-    TERM: process.env.TERM,
-    TMPDIR: process.env.TMPDIR,
-    CI: process.env.CI,
-    CHROME_BIN: process.env.CHROME_BIN,
-    XDG_DATA_HOME: opencodeDataHome || process.env.XDG_DATA_HOME || undefined,
-    OPENAI_API_KEY: OPENAI_API_KEY || undefined,
-    ANTHROPIC_API_KEY: ANTHROPIC_API_KEY || undefined,
-    AZURE_API_KEY: AZURE_API_KEY || undefined,
-    AZURE_RESOURCE_NAME: AZURE_RESOURCE_NAME || undefined,
-    LLM_MODEL
-  };
+  const opencodeEnv = buildOpencodeEnv({ OPENAI_API_KEY, ANTHROPIC_API_KEY, AZURE_API_KEY, AZURE_RESOURCE_NAME, LLM_MODEL, opencodeDataHome });
 
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
   log("info", "opencode.start", { model: LLM_MODEL, dir: repoDir, promptPath });
@@ -249,8 +233,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   const commitRes = await runWithRetry("git", ["commit", "-m", commitMsg], { cwd: repoDir, env: gitEnv });
   if (commitRes.exitCode !== 0) die("git commit failed", { exitCode: commitRes.exitCode });
 
-  const authHeader = Buffer.from(`x-access-token:${GH_TOKEN}`, "utf8").toString("base64");
-  const gitWithAuth = (args) => ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authHeader}`, ...args];
+  const gitWithAuth = buildGitWithAuth(GH_TOKEN);
 
   let pushRes = await runWithRetry("git", gitWithAuth(["push", "-u", "origin", branchName]), { cwd: repoDir, env: gitEnv });
   if (pushRes.exitCode !== 0) {

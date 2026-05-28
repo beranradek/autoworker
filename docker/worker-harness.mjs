@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { log, die, writeOpencodeAuth } from "./lib/common.mjs";
+import { log, die } from "./lib/common.mjs";
 import { runImplementation } from "./lib/implement.mjs";
 import { runPrReview } from "./lib/review.mjs";
 
