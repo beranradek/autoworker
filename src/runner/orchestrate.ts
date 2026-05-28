@@ -98,11 +98,14 @@ export async function runOrchestration(
           correlationId,
           llmModel: cfg.LLM_MODEL
         });
+        // Count the issue as accepted immediately after the runner launches so that
+        // a transitionTo failure below does not allow a second worker to be dispatched
+        // for the same issue within this poll cycle.
+        accepted++;
         // Claim the issue only after the runner has successfully launched the worker,
         // so a runner failure leaves the issue in "open" state and it can be retried.
         await service.transitionTo(issue, "in_progress");
         log("info", "orchestrate.impl.dispatched", { repo: repoKey, issue: issueKey, correlationId });
-        accepted++;
       } catch (err) {
         log("error", "orchestrate.impl.error", { repo: repoKey, issue: issue.number, error: String(err) });
       }

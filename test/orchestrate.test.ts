@@ -18,7 +18,6 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     LABEL_PR_REVIEW_DISPATCHED: "pr-review-dispatched",
     POLL_INTERVAL_SECONDS: 60,
     MAX_ACCEPT_PER_RUN: 5,
-    MAX_CONCURRENT_WORKERS: 5,
     DRY_RUN: false,
     STEP_PR_MERGE: false,
     STEP_PR_REVIEW: false,

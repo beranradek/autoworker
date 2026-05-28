@@ -101,8 +101,14 @@ export async function cleanupDockerContainers(
     log("info", "cleanup.docker.delete_candidate", { name });
     if (dryRun) continue;
 
-    execSyncFn(`docker rm ${name}`);
-    deleted += 1;
+    try {
+      execSyncFn(`docker rm ${name}`);
+      deleted += 1;
+    } catch (rmErr: any) {
+      // Container may have already been removed (e.g. by another process or `docker run --rm`).
+      // Log a warning but continue cleaning up remaining containers.
+      log("warn", "cleanup.docker.rm_failed", { name, error: String(rmErr?.message ?? rmErr) });
+    }
   }
 
   log("info", "cleanup.docker.done", { deleted, total });

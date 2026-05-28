@@ -5,6 +5,7 @@ import type { RepoRef } from "../github/types.js";
 import type { Config } from "../config.js";
 import { containsMention } from "../github/mentions.js";
 import { normalizeLabels } from "../github/issues.js";
+import { log } from "../log.js";
 
 export class GitHubIssueService implements IssueService {
   constructor(private octokit: Octokit, private repo: RepoRef, private cfg: Config) {}
@@ -52,11 +53,17 @@ export class GitHubIssueService implements IssueService {
       await this.addLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
     } else if (newState === "pr_reviewed") {
       await this.addLabel(issue.number, this.cfg.LABEL_PR_REVIEWED);
+      // Remove all predecessor labels so closed/human-audited issues stay clean.
       await this.removeLabel(issue.number, this.cfg.LABEL_PR_REVIEW_DISPATCHED);
+      await this.removeLabel(issue.number, this.cfg.LABEL_PR_CREATED);
+      await this.removeLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
       if (opts?.prReviewOutcome === "human_needed") {
         await this.addLabel(issue.number, this.cfg.LABEL_HUMAN_NEEDED);
       }
     } else if (newState === "closed") {
+      // Remove the pr-reviewed label (and any residual labels) so the issue is clean after close.
+      await this.removeLabel(issue.number, this.cfg.LABEL_PR_REVIEWED);
+      await this.removeLabel(issue.number, this.cfg.LABEL_HUMAN_NEEDED);
       await this.octokit.issues.update({
         owner: this.repo.owner,
         repo: this.repo.repo,
@@ -167,6 +174,13 @@ export class GitHubIssueService implements IssueService {
       issue_number: issue.number,
       per_page: 100
     });
+    if (comments.data.length === 100) {
+      log("warn", "github_service.list_comments.truncated", {
+        repo: `${this.repo.owner}/${this.repo.repo}`,
+        issue: issue.number,
+        note: "fetched exactly 100 comments; additional comments are not checked for worker mentions"
+      });
+    }
     for (const c of comments.data) {
       if (containsMention(c.body ?? "", this.cfg.WORKER_MENTION)) return true;
     }
