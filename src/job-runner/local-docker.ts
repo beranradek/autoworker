@@ -6,12 +6,15 @@ import type { ImplementationRunInput, ImplementationRunResult, JobRunner, PrRevi
 export type SpawnFn = typeof spawn;
 
 function sanitizeContainerName(id: string): string {
-  return id
+  const sanitized = id
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 63);
+  // Docker requires names to start with [a-zA-Z0-9]. Fall back to a safe default
+  // if sanitization produces an empty string (e.g. correlationId is all symbols).
+  return sanitized || "worker";
 }
 
 function openLogStdio(correlationId: string): number | "ignore" {
@@ -45,13 +48,9 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
     args.push(
       "-e",
-      `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
+      `LLM_MODEL=${input.llmModel ?? "openai/gpt-4o-mini"}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
-      "--label",
-      "autoworker.managed=true",
-      "--label",
-      `autoworker.correlationId=${input.correlationId}`,
       input.workerImage
     );
 
@@ -91,7 +90,7 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
     args.push(
       "-e",
-      `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
+      `LLM_MODEL=${input.llmModel ?? "openai/gpt-4o-mini"}`,
       "-e",
       `WORKER_MODE=pr-review`,
       "-e",
@@ -102,10 +101,6 @@ export class LocalDockerJobRunner implements JobRunner {
       `BASE_BRANCH=${input.baseBranch}`,
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
-      "--label",
-      "autoworker.managed=true",
-      "--label",
-      `autoworker.correlationId=${input.correlationId}`,
       input.workerImage
     );
 

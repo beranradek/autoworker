@@ -23,6 +23,11 @@ function envId(subscriptionId: string, resourceGroup: string, envName: string): 
 function makeJobName(prefix: string, correlationId: string): string {
   const jobPrefix = `${prefix}-`;
   const maxSuffixLen = 32 - jobPrefix.length;
+  if (maxSuffixLen <= 0) {
+    // jobNamePrefix is too long to accommodate any suffix; return the prefix
+    // trimmed to 32 chars (minus the trailing hyphen) so Azure accepts it.
+    return jobPrefix.slice(0, 32).replace(/-+$/, "");
+  }
   // Slice from the END so the timestamp (rightmost component) is always preserved,
   // ensuring uniqueness even when the correlationId has a long fixed-prefix segment
   // (e.g. "pr-review-<repo>-<issue>-<ts>") that would otherwise truncate away the
@@ -68,7 +73,7 @@ export class AcaJobRunner implements JobRunner {
         ...(input.azureApiKey ? { AZURE_API_KEY: input.azureApiKey } : {}),
         ...(input.azureResourceName ? { AZURE_RESOURCE_NAME: input.azureResourceName } : {}),
         ...(input.opencodeAuthJson ? { OPENCODE_AUTH_JSON: input.opencodeAuthJson } : {}),
-        LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
+        LLM_MODEL: input.llmModel ?? "openai/gpt-4o-mini",
         ISSUE_URL: input.issueUrl
       }
     });
@@ -97,7 +102,7 @@ export class AcaJobRunner implements JobRunner {
         ...(input.azureApiKey ? { AZURE_API_KEY: input.azureApiKey } : {}),
         ...(input.azureResourceName ? { AZURE_RESOURCE_NAME: input.azureResourceName } : {}),
         ...(input.opencodeAuthJson ? { OPENCODE_AUTH_JSON: input.opencodeAuthJson } : {}),
-        LLM_MODEL: input.llmModel ?? "openai/gpt-5-mini",
+        LLM_MODEL: input.llmModel ?? "openai/gpt-4o-mini",
         WORKER_MODE: "pr-review",
         PR_URL: input.prUrl,
         PR_BRANCH: input.prBranch,

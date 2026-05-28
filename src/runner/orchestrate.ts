@@ -44,21 +44,35 @@ export async function runOrchestration(
         }
         await service.markPrReviewDispatched(issue);
         const correlationId = `pr-review-${repoKey.replace("/", "-")}-${issue.number}-${Date.now()}`;
-        await runner.runPrReview({
-          issueUrl: issue.url,
-          prUrl: pr.url,
-          prBranch: pr.branch,
-          baseBranch: pr.baseBranch,
-          githubToken: cfg.GITHUB_TOKEN,
-          openaiApiKey: cfg.OPENAI_API_KEY,
-          anthropicApiKey: cfg.ANTHROPIC_API_KEY,
-          azureApiKey: cfg.AZURE_API_KEY,
-          azureResourceName: cfg.AZURE_RESOURCE_NAME,
-          opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
-          workerImage: cfg.PR_REVIEW_WORKER_IMAGE ?? cfg.WORKER_IMAGE!,
-          correlationId,
-          llmModel: cfg.LLM_MODEL
-        });
+        try {
+          await runner.runPrReview({
+            issueUrl: issue.url,
+            prUrl: pr.url,
+            prBranch: pr.branch,
+            baseBranch: pr.baseBranch,
+            githubToken: cfg.GITHUB_TOKEN,
+            openaiApiKey: cfg.OPENAI_API_KEY,
+            anthropicApiKey: cfg.ANTHROPIC_API_KEY,
+            azureApiKey: cfg.AZURE_API_KEY,
+            azureResourceName: cfg.AZURE_RESOURCE_NAME,
+            opencodeAuthJson: cfg.OPENCODE_AUTH_JSON,
+            workerImage: cfg.PR_REVIEW_WORKER_IMAGE ?? cfg.WORKER_IMAGE!,
+            correlationId,
+            llmModel: cfg.LLM_MODEL
+          });
+        } catch (runErr) {
+          // markPrReviewDispatched already succeeded, so the issue has the
+          // pr-review-dispatched label but no worker running. It will not be
+          // retried automatically. Remove the label manually to re-enable dispatch.
+          log("error", "orchestrate.pr_review.run_failed", {
+            repo: repoKey,
+            issue: issue.number,
+            correlationId,
+            error: String(runErr),
+            note: `pr-review-dispatched label was set but the worker failed to start; remove the "${cfg.LABEL_PR_REVIEW_DISPATCHED}" label from issue #${issue.number} to allow a re-dispatch`
+          });
+          throw runErr;
+        }
         log("info", "orchestrate.pr_review.dispatched", { repo: repoKey, issue: issue.number, correlationId });
       } catch (err) {
         log("error", "orchestrate.pr_review.error", { repo: repoKey, issue: issue.number, error: String(err) });
@@ -102,10 +116,22 @@ export async function runOrchestration(
         // a transitionTo failure below does not allow a second worker to be dispatched
         // for the same issue within this poll cycle.
         accepted++;
+        log("info", "orchestrate.impl.dispatched", { repo: repoKey, issue: issueKey, correlationId });
         // Claim the issue only after the runner has successfully launched the worker,
         // so a runner failure leaves the issue in "open" state and it can be retried.
-        await service.transitionTo(issue, "in_progress");
-        log("info", "orchestrate.impl.dispatched", { repo: repoKey, issue: issueKey, correlationId });
+        try {
+          await service.transitionTo(issue, "in_progress");
+        } catch (labelErr) {
+          // Worker is already running. The issue will appear as "open" on the next poll
+          // and a second worker will be dispatched unless the label is added manually.
+          log("error", "orchestrate.impl.label_failed", {
+            repo: repoKey,
+            issue: issueKey,
+            correlationId,
+            error: String(labelErr),
+            note: `worker container started but in-progress label could not be set; add the "${cfg.LABEL_IN_PROGRESS}" label to issue ${issueKey} manually to prevent a duplicate dispatch on the next poll`
+          });
+        }
       } catch (err) {
         log("error", "orchestrate.impl.error", { repo: repoKey, issue: issue.number, error: String(err) });
       }
