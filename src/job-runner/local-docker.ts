@@ -48,6 +48,8 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.opencodeAuthJson) args.push("-e", `OPENCODE_AUTH_JSON=${input.opencodeAuthJson}`);
     if (input.labelInProgress) args.push("-e", `ISSUE_LABEL_IN_PROGRESS=${input.labelInProgress}`);
     if (input.labelPrCreated) args.push("-e", `ISSUE_LABEL_PR_CREATED=${input.labelPrCreated}`);
+    const repoFromUrl = input.issueUrl.match(/github\.com\/([^/]+\/[^/]+)\//)?.[1];
+    if (repoFromUrl) args.push("-e", `GITHUB_REPOS=${repoFromUrl}`);
     args.push(
       "-e",
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
@@ -95,6 +97,8 @@ export class LocalDockerJobRunner implements JobRunner {
     if (input.labelInReview) args.push("-e", `ISSUE_LABEL_IN_REVIEW=${input.labelInReview}`);
     if (input.labelPrReviewed) args.push("-e", `ISSUE_LABEL_PR_REVIEWED=${input.labelPrReviewed}`);
     if (input.labelHumanNeeded) args.push("-e", `ISSUE_LABEL_HUMAN_NEEDED=${input.labelHumanNeeded}`);
+    const repoFromPrUrl = input.issueUrl.match(/github\.com\/([^/]+\/[^/]+)\//)?.[1];
+    if (repoFromPrUrl) args.push("-e", `GITHUB_REPOS=${repoFromPrUrl}`);
     args.push(
       "-e",
       `LLM_MODEL=${input.llmModel ?? "openai/gpt-5-mini"}`,
