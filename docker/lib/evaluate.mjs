@@ -50,7 +50,6 @@ export async function runGrader({ criteriaText, diffText, resultData, repoDir, a
     });
     log(ocExitCode === 0 ? "info" : "warn", "grader.opencode.done", { iteration, exitCode: ocExitCode });
     if (ocExitCode !== 0) {
-      log("error", "grader.opencode.failed", { iteration, exitCode: ocExitCode });
       return null;
     }
 
@@ -66,25 +65,12 @@ export async function runGrader({ criteriaText, diffText, resultData, repoDir, a
       return null;
     }
 
-    try {
-      fs.rmSync(evalResultPath, { force: true });
-    } catch {
-      // ignore
-    }
+    fs.rmSync(evalResultPath, { force: true });
 
     const parsed = evalResult.parsed ?? {};
     const pass = typeof parsed.pass === "boolean" ? parsed.pass : false;
     const gaps = Array.isArray(parsed.gaps) ? parsed.gaps : [];
     const summary = String(parsed.summary ?? "");
-
-    if (typeof pass !== "boolean" || !Array.isArray(gaps) || typeof summary !== "string") {
-      log("warn", "grader.eval_result.invalid_schema", {
-        iteration,
-        path: evalResultPath,
-        parsed: JSON.stringify(parsed)
-      });
-      return null;
-    }
 
     log("info", "eval.done", { iteration, pass, gapCount: gaps.length });
     return { pass, gaps, summary };
