@@ -54,6 +54,12 @@ variable "use_claude_subscription" {
   description = "Use a monthly Claude subscription (OpenCode OAuth) instead of an LLM API key. When true, the poller reads the `opencode-auth-json` Key Vault secret (set via scripts/opencode-auth.sh push-azure) and injects it as OPENCODE_AUTH_JSON; no provider api-key secret is wired. Requires an anthropic/ llm_model."
 }
 
+variable "enable_github_webhook_secret" {
+  type        = bool
+  default     = false
+  description = "Set to true once github-webhook-secret has been stored in Key Vault. When false the GITHUB_WEBHOOK_SECRET env var is omitted and the orchestrator skips HMAC verification."
+}
+
 variable "safety_poll_interval_seconds" {
   type        = number
   default     = 900

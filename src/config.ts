@@ -27,7 +27,7 @@ const schema = z.object({
   WORK_HOURS_END: z.coerce.number().int().min(0).max(23).default(21),
   WORK_HOURS_TZ: z.string().default("Europe/Prague"),
 
-  POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
+  POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(900),
   MAX_ACCEPT_PER_RUN: z.coerce.number().int().positive().default(1),
   DRY_RUN: z
     .enum(["0", "1", "true", "false"])

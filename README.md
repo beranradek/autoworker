@@ -191,7 +191,7 @@ The poller validates `OPENCODE_AUTH_JSON` before dispatching: a malformed payloa
 Optional:
 
 - `GITHUB_WEBHOOK_SECRET` (required for `serve`/webhook mode — see "Webhook mode")
-- `POLL_INTERVAL_SECONDS` (default `60`; in `serve` mode this is the safety-net poll interval)
+- `POLL_INTERVAL_SECONDS` (default `900`; in `serve` mode this is the safety-net poll interval)
 - `MAX_ACCEPT_PER_RUN` (default `1`)
 - `MAX_CONCURRENT_WORKERS` (default `5`)
 - `JOB_RUNNER` (`local-docker` or `aca`)

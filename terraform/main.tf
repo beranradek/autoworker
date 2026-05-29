@@ -38,6 +38,8 @@ locals {
   use_subscription          = var.use_claude_subscription
   use_api_key               = !var.use_claude_subscription
   opencode_auth_secret_name = "opencode-auth-json"
+  # Webhook secret is optional — only wired once the Key Vault secret exists.
+  use_webhook_secret = var.enable_github_webhook_secret
 }
 
 # ---------------------------------------------------------------------------
@@ -171,10 +173,13 @@ resource "azurerm_container_app" "orchestrator" {
     identity            = azurerm_user_assigned_identity.autoworker.id
   }
 
-  secret {
-    name                = "github-webhook-secret"
-    key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/github-webhook-secret"
-    identity            = azurerm_user_assigned_identity.autoworker.id
+  dynamic "secret" {
+    for_each = local.use_webhook_secret ? [1] : []
+    content {
+      name                = "github-webhook-secret"
+      key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/github-webhook-secret"
+      identity            = azurerm_user_assigned_identity.autoworker.id
+    }
   }
 
   dynamic "secret" {
@@ -215,9 +220,12 @@ resource "azurerm_container_app" "orchestrator" {
         name        = "GITHUB_TOKEN"
         secret_name = "github-token"
       }
-      env {
-        name        = "GITHUB_WEBHOOK_SECRET"
-        secret_name = "github-webhook-secret"
+      dynamic "env" {
+        for_each = local.use_webhook_secret ? [1] : []
+        content {
+          name        = "GITHUB_WEBHOOK_SECRET"
+          secret_name = "github-webhook-secret"
+        }
       }
 
       # --- Safety-net poll (relaxed; webhooks drive most work) ---
@@ -351,6 +359,8 @@ output "secret_setup_commands" {
     After applying, set the secrets in Key Vault (never committed to disk):
 
       az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-token --value "YOUR_GITHUB_PAT"
+
+    GitHub webhook secret (optional — set when ready, then re-apply with enable_github_webhook_secret=true):
       az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-webhook-secret --value "YOUR_WEBHOOK_SECRET"
 
     ${local.use_subscription ?

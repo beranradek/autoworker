@@ -40,10 +40,11 @@ All other variables have sensible defaults (see `variables.tf`).
 Set them after the first apply (see the `secret_setup_commands` output for the exact name):
 
 ```bash
-az keyvault secret set --vault-name autoworker-kv --name github-token          --value "ghp_..."
-az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret  --value "<random-secret>"
-az keyvault secret set --vault-name autoworker-kv --name openai-api-key         --value "sk-..."   # or anthropic-api-key / azure-api-key
+az keyvault secret set --vault-name autoworker-kv --name github-token   --value "ghp_..."
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."   # or anthropic-api-key / azure-api-key
 ```
+
+`github-webhook-secret` is optional — see step 2 below.
 
 ## Usage
 
@@ -67,9 +68,15 @@ terraform apply
 ### 2. Set secrets in Key Vault (shown in terraform output `secret_setup_commands`)
 
 ```bash
-az keyvault secret set --vault-name autoworker-kv --name github-token          --value "ghp_..."
-az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret  --value "<random-secret>"
-az keyvault secret set --vault-name autoworker-kv --name openai-api-key         --value "sk-..."
+az keyvault secret set --vault-name autoworker-kv --name github-token   --value "ghp_..."
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."   # or anthropic-api-key / azure-api-key
+```
+
+The GitHub webhook secret is **optional at first apply**. Set it when you're ready, then re-apply with the flag to wire it in:
+
+```bash
+az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret --value "<random-secret>"
+terraform apply -var="enable_github_webhook_secret=true"
 ```
 
 ### 3. Build and push images to ACR
