@@ -84,18 +84,17 @@ GITHUB_WEBHOOK_SECRET=... pnpm build && node dist/cli.js serve
 
 ### Scheduling / active window
 
-- The orchestrator runs **24/7, every day** by default — it reacts to webhooks
-  instantly at any hour and on any weekday (including weekends).
+- **Webhooks are processed 24/7, every day** — events trigger orchestration
+  instantly at any hour and on any weekday.
+- The **safety-net poll** runs every `POLL_INTERVAL_SECONDS` (Terraform:
+  `safety_poll_interval_seconds`, default 900s) but only within the work-hours
+  window (`WORK_HOURS_START`–`WORK_HOURS_END`, default **07:00–21:00**
+  `WORK_HOURS_TZ`, default `Europe/Prague`). Outside that window the poll pauses
+  to spare cost; anything it would have caught is still handled by webhooks (or
+  by the poll when the window reopens). The window gates by hour every day,
+  never by weekday; set `WORK_HOURS_START == WORK_HOURS_END` to disable it.
 - There is no cron schedule: the previous scheduled ACA Job (cron
-  `*/2 5-19 * * 1-5`) is replaced by an always-on Container App. The only timed
-  behavior is the safety-net poll, which runs every `POLL_INTERVAL_SECONDS`
-  (Terraform: `safety_poll_interval_seconds`, default 900s) around the clock.
-- To throttle worker dispatch to a daily window (e.g. office hours), set both
-  `WORK_HOURS_START` and `WORK_HOURS_END` (and optionally `WORK_HOURS_TZ`,
-  default `Europe/Prague`). When set, events received outside the window stay
-  queued (coalesced per repo) and are drained when it reopens. The window is
-  applied by hour every day — it never gates by weekday. Leaving
-  `WORK_HOURS_START == WORK_HOURS_END` (the default `0 == 0`) means 24/7.
+  `*/2 5-19 * * 1-5`) is replaced by an always-on Container App.
 
 Notes / constraints:
 
@@ -199,8 +198,8 @@ Optional:
 - `LABEL_FAILED` (default `worker-failed`)
 - `HEALTH_HOST` (default `0.0.0.0`)
 - `HEALTH_PORT` (default `8080`)
-- `WORK_HOURS_START` (default `0` — disabled; set with `WORK_HOURS_END` to throttle to a daily window)
-- `WORK_HOURS_END` (default `0` — when equal to `WORK_HOURS_START` the app runs 24/7)
+- `WORK_HOURS_START` (default `7`) — applies to the **safety-net poll only**, not webhooks
+- `WORK_HOURS_END` (default `21`) — set equal to `WORK_HOURS_START` to run the poll 24/7 too
 - `WORK_HOURS_TZ` (default `Europe/Prague`)
 
 Azure runner (`JOB_RUNNER=aca`) additionally requires:

@@ -3,7 +3,6 @@ import { log } from "../log.js";
 import { createGitHubClient } from "../github/client.js";
 import { GitHubIssueService } from "../issues/github-service.js";
 import { startHealthServer } from "../health/server.js";
-import { isWithinWorkHours, secondsUntilNextWorkWindow } from "../schedule/work-hours.js";
 import {
   markWebhookError,
   markWebhookProcessed,
@@ -19,14 +18,12 @@ import type { Config } from "../config.js";
 import type { Octokit } from "@octokit/rest";
 import type { JobRunner } from "../job-runner/types.js";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /**
  * Drain the webhook queue forever, running orchestration for each repo whose
- * events arrived. Respects work hours (matching the poll loop) so workers are
- * not dispatched outside the configured window — events stay queued until the
- * window reopens. Runs under the shared lock so it never overlaps the
- * safety-net poll.
+ * events arrived. Webhooks are processed around the clock — work-hours gating
+ * applies only to the safety-net poll, not here, so the service stays reactive
+ * 24/7 while the periodic poll pauses overnight to spare cost. Runs under the
+ * shared lock so it never overlaps the poll.
  */
 async function consumeWebhooks(
   queue: FifoQueue,
@@ -37,35 +34,8 @@ async function consumeWebhooks(
 ): Promise<void> {
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (!isWithinWorkHours(new Date(), {
-      timeZone: cfg.WORK_HOURS_TZ,
-      startHour: cfg.WORK_HOURS_START,
-      endHour: cfg.WORK_HOURS_END
-    })) {
-      const secondsUntil = secondsUntilNextWorkWindow(new Date(), {
-        timeZone: cfg.WORK_HOURS_TZ,
-        startHour: cfg.WORK_HOURS_START,
-        endHour: cfg.WORK_HOURS_END
-      });
-      // Don't take from the queue while outside work hours — events accumulate
-      // (coalesced per repo) and are drained when the window reopens.
-      await sleep(Math.min(Math.max(secondsUntil, 60), 15 * 60) * 1000);
-      continue;
-    }
-
     const job = await queue.take();
     setQueueDepth(queue.depth);
-
-    // A work-hours boundary may have been crossed while parked on take(); if so,
-    // put the job back and loop to the sleep branch above.
-    if (!isWithinWorkHours(new Date(), {
-      timeZone: cfg.WORK_HOURS_TZ,
-      startHour: cfg.WORK_HOURS_START,
-      endHour: cfg.WORK_HOURS_END
-    })) {
-      queue.enqueue(job);
-      continue;
-    }
 
     log("info", "webhook.process_start", { repo: job.repoKey, reason: job.reason });
     try {

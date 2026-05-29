@@ -53,13 +53,16 @@ describe("secondsUntilNextWorkWindow", () => {
 });
 
 describe("config work-hours defaults", () => {
-  it("defaults to 24/7 (WORK_HOURS_START === WORK_HOURS_END)", () => {
+  it("defaults the (poll-only) window to 07:00-21:00", () => {
     const prev = process.env;
     process.env = { ...prev, GITHUB_TOKEN: "x", GITHUB_REPOS: "o/r", JOB_RUNNER: "local-docker", DRY_RUN: "true" };
     try {
       const cfg = getConfig();
-      expect(cfg.WORK_HOURS_START).toBe(cfg.WORK_HOURS_END);
-      expect(isWithinWorkHours(at(3), { timeZone: cfg.WORK_HOURS_TZ, startHour: cfg.WORK_HOURS_START, endHour: cfg.WORK_HOURS_END })).toBe(true);
+      expect(cfg.WORK_HOURS_START).toBe(7);
+      expect(cfg.WORK_HOURS_END).toBe(21);
+      const opts = { timeZone: cfg.WORK_HOURS_TZ, startHour: cfg.WORK_HOURS_START, endHour: cfg.WORK_HOURS_END };
+      expect(isWithinWorkHours(at(3), opts)).toBe(false);
+      expect(isWithinWorkHours(at(10), opts)).toBe(true);
     } finally {
       process.env = prev;
     }
