@@ -1,6 +1,7 @@
 import type { CloseReason, Issue, IssueState, PrInfo, PrReviewOutcome } from './model.js';
 
 export interface IssueService {
+  ensureLabels(): Promise<void>;
   listIssuesByState(state: IssueState): Promise<Issue[]>;
   transitionTo(
     issue: Issue,

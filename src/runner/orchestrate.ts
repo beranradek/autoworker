@@ -9,6 +9,8 @@ export async function runOrchestration(
   cfg: Config,
   repoKey: string
 ): Promise<void> {
+  await service.ensureLabels();
+
   if (cfg.STEP_PR_MERGE) {
     const issues = await service.listIssuesByState("pr_reviewed");
     for (const issue of issues) {

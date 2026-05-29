@@ -10,6 +10,39 @@ import { log } from "../log.js";
 export class GitHubIssueService implements IssueService {
   constructor(private octokit: Octokit, private repo: RepoRef, private cfg: Config) {}
 
+  async ensureLabels(): Promise<void> {
+    const needed = [
+      // Orchestrator state labels
+      { name: this.cfg.LABEL_IN_PROGRESS,  color: "e4e669", description: "Worker is implementing this issue" },
+      { name: this.cfg.LABEL_FAILED,        color: "d93f0b", description: "Worker failed to process this issue" },
+      { name: this.cfg.LABEL_PR_CREATED,    color: "0e8a16", description: "Worker created a PR for this issue" },
+      { name: this.cfg.LABEL_IN_REVIEW,     color: "bfd4f2", description: "Worker is reviewing the PR" },
+      { name: this.cfg.LABEL_PR_REVIEWED,   color: "c2e0c6", description: "Worker reviewed the PR" },
+      { name: this.cfg.LABEL_HUMAN_NEEDED,  color: "f9d0c4", description: "Human review needed" },
+      // Worker rejection labels (defaults match GitHub's built-in labels)
+      { name: "wontfix",     color: "ffffff", description: "This will not be worked on" },
+      { name: "invalid",     color: "e4e669", description: "This doesn't seem right" },
+      { name: "duplicate",   color: "cfd3d7", description: "This issue or PR already exists" },
+      { name: "help wanted", color: "008672", description: "Extra attention is needed" },
+      { name: "question",    color: "d876e3", description: "Further information is requested" },
+    ];
+    for (const label of needed) {
+      try {
+        await this.octokit.issues.createLabel({
+          owner: this.repo.owner,
+          repo: this.repo.repo,
+          name: label.name,
+          color: label.color,
+          description: label.description
+        });
+        log("info", "label.created", { repo: `${this.repo.owner}/${this.repo.repo}`, label: label.name });
+      } catch (err: unknown) {
+        if ((err as { status?: number })?.status === 422) continue; // already exists
+        throw err;
+      }
+    }
+  }
+
   async listIssuesByState(state: IssueState): Promise<Issue[]> {
     const apiState = state === "closed" ? "closed" : "open";
     const res = await this.octokit.issues.listForRepo({
