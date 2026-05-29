@@ -9,6 +9,49 @@ Supported runners:
 - `JOB_RUNNER=local-docker` (default): runs the worker containers locally from main Node.js server via Docker
 - `JOB_RUNNER=aca`: creates + starts remote per-issue Azure Container Apps Jobs from main Node.js server
 
+## Architecture
+
+```mermaid
+graph TD
+    GH["GitHub\n(Issues / PRs / Comments)"]
+
+    subgraph ACA["Azure Container Apps"]
+        subgraph Orchestrator["Orchestrator — always-on Container App"]
+            WH["POST /webhook\n+ safety-net poll"]
+            Queue["In-memory FIFO Queue"]
+            Orch["runOrchestration\n(label-driven)"]
+            WH --> Queue --> Orch
+        end
+
+        subgraph WorkerImpl["Worker Job — IMPLEMENTATION"]
+            Impl["Implementer agent\n(OpenCode)"]
+            Eval["Evaluator agent\n(OpenCode, fresh context)"]
+            Impl -->|"up to MAX_EVAL_ITERATIONS\ngap feedback"| Eval
+            Eval -->|"next iteration"| Impl
+        end
+
+        subgraph WorkerReview["Worker Job — PR_REVIEW"]
+            PRRev["PR Reviewer agent\n(OpenCode)"]
+        end
+    end
+
+    GH -->|"webhook events"| WH
+    Orch -->|"IMPLEMENTATION\nspawn job per issue"| WorkerImpl
+    Orch -->|"PR_REVIEW\nspawn job per PR"| WorkerReview
+    WorkerImpl -->|"commit + push + open PR"| GH
+    WorkerReview -->|"review comment"| GH
+```
+
+## Worker container agents
+
+Each worker is an ephemeral container (an Azure Container Apps Job or a local Docker container) that runs one or two OpenCode CLI sessions. OpenCode receives a minimal set of env vars — no GitHub credentials — so only the surrounding harness can perform GitHub operations.
+
+**IMPLEMENTATION mode** (triggered when an issue mentions `@worker`): the implementer agent clones the repo and edits code to address the issue. An evaluator agent then opens a fresh context, reads the resulting `git diff`, and checks it against the `## Acceptance Criteria` section in the issue body (if present). If the diff falls short, the evaluator feeds a gap list back to the implementer for another iteration; this cycle repeats up to `MAX_EVAL_ITERATIONS` times (default 2). Once the evaluator is satisfied (or the limit is reached), the harness commits, pushes, opens a PR, and posts the PR link as a comment on the issue.
+
+**PR_REVIEW mode** (triggered when a PR needs review): a single PR reviewer agent reads the PR diff and posts a structured review comment. No iteration is needed.
+
+Including a `## Acceptance Criteria` section in an issue body activates the evaluator loop and gives the implementer measurable goals to converge on.
+
 ## Workflow
 
 1. Find issues that mention `WORKER_MENTION` (default `@worker`)
