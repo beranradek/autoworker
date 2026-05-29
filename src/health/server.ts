@@ -28,16 +28,22 @@ function readBody(req: http.IncomingMessage, limitBytes: number): Promise<Buffer
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let aborted = false;
     req.on("data", (chunk: Buffer) => {
+      if (aborted) return;
       size += chunk.length;
       if (size > limitBytes) {
+        // Stop accumulating and reject, but don't destroy the socket — we still
+        // want to send a clean 413 response on it.
+        aborted = true;
         reject(new Error("payload too large"));
-        req.destroy();
         return;
       }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("end", () => {
+      if (!aborted) resolve(Buffer.concat(chunks));
+    });
     req.on("error", reject);
   });
 }

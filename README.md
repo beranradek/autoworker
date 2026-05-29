@@ -1,6 +1,8 @@
 # Autoworker
 
-Polls GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker container (OpenCode CLI with harness) that implements the issue and posts a PR link back to the issue.
+Watches GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker container (OpenCode CLI with harness) that implements the issue and posts a PR link back to the issue.
+
+It can run in two modes: a polling loop (`poll`) or an always-on, event-driven service (`serve`) that reacts to GitHub webhooks while keeping a safety-net poll — see "Webhook mode (`serve`)" below.
 
 Supported runners:
 
@@ -80,21 +82,45 @@ GITHUB_WEBHOOK_SECRET=... pnpm build && node dist/cli.js serve
   poll catches anything missed while the endpoint was down. The webhook consumer
   and the poll never run concurrently (a shared lock serializes them).
 
+### Scheduling / active window
+
+- The orchestrator runs **24/7, every day** by default — it reacts to webhooks
+  instantly at any hour and on any weekday (including weekends).
+- There is no cron schedule: the previous scheduled ACA Job (cron
+  `*/2 5-19 * * 1-5`) is replaced by an always-on Container App. The only timed
+  behavior is the safety-net poll, which runs every `POLL_INTERVAL_SECONDS`
+  (Terraform: `safety_poll_interval_seconds`, default 900s) around the clock.
+- To throttle worker dispatch to a daily window (e.g. office hours), set both
+  `WORK_HOURS_START` and `WORK_HOURS_END` (and optionally `WORK_HOURS_TZ`,
+  default `Europe/Prague`). When set, events received outside the window stay
+  queued (coalesced per repo) and are drained when it reopens. The window is
+  applied by hour every day — it never gates by weekday. Leaving
+  `WORK_HOURS_START == WORK_HOURS_END` (the default `0 == 0`) means 24/7.
+
 Notes / constraints:
 
 - **Single replica only.** The FIFO queue is process-local; running more than one
   replica would double-process events.
-- Work-hours gating (`WORK_HOURS_*`, default 08:00–21:00 Europe/Prague) applies to
-  the webhook consumer too: events received outside the window stay queued
-  (coalesced per repo) and are drained when the window reopens. Unlike the old
-  cron schedule, gating is by hour only, not weekday.
 
-Configure the webhook in GitHub (repo or org Settings → Webhooks):
+### Webhook configuration
 
-- Payload URL: `https://<host>/webhook`
-- Content type: `application/json`
-- Secret: the same value as `GITHUB_WEBHOOK_SECRET`
-- Events: Issues, Issue comments, Pull requests, Pull request reviews
+The shared secret must match on both sides:
+
+1. **Key Vault** (Azure) — store the secret so the app can read it as
+   `GITHUB_WEBHOOK_SECRET` via the managed identity:
+
+   ```bash
+   az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret --value "<random-secret>"
+   ```
+
+   (Locally, just set `GITHUB_WEBHOOK_SECRET` in the environment / `.env`.)
+
+2. **GitHub** (repo or org Settings → Webhooks → Add webhook):
+
+   - Payload URL: `https://<host>/webhook` (in Azure, the `webhook_url` Terraform output)
+   - Content type: `application/json`
+   - Secret: the **same** value stored in Key Vault
+   - Events: Issues, Issue comments, Pull requests, Pull request reviews
 
 ## Env vars
 
@@ -165,15 +191,16 @@ The poller validates `OPENCODE_AUTH_JSON` before dispatching: a malformed payloa
 
 Optional:
 
-- `POLL_INTERVAL_SECONDS` (default `60`)
+- `GITHUB_WEBHOOK_SECRET` (required for `serve`/webhook mode — see "Webhook mode")
+- `POLL_INTERVAL_SECONDS` (default `60`; in `serve` mode this is the safety-net poll interval)
 - `MAX_ACCEPT_PER_RUN` (default `1`)
 - `MAX_CONCURRENT_WORKERS` (default `5`)
 - `JOB_RUNNER` (`local-docker` or `aca`)
 - `LABEL_FAILED` (default `worker-failed`)
 - `HEALTH_HOST` (default `0.0.0.0`)
 - `HEALTH_PORT` (default `8080`)
-- `WORK_HOURS_START` (default `8`)
-- `WORK_HOURS_END` (default `21`)
+- `WORK_HOURS_START` (default `0` — disabled; set with `WORK_HOURS_END` to throttle to a daily window)
+- `WORK_HOURS_END` (default `0` — when equal to `WORK_HOURS_START` the app runs 24/7)
 - `WORK_HOURS_TZ` (default `Europe/Prague`)
 
 Azure runner (`JOB_RUNNER=aca`) additionally requires:

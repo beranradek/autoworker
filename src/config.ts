@@ -19,8 +19,12 @@ const schema = z.object({
   // Required by `serve` mode, which exposes the POST /webhook endpoint.
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
 
-  WORK_HOURS_START: z.coerce.number().int().min(0).max(23).default(8),
-  WORK_HOURS_END: z.coerce.number().int().min(0).max(23).default(21),
+  // Work-hours window for dispatching workers. By default the window is
+  // disabled (start == end ⇒ 24/7, every day). Set both to a real range
+  // (e.g. START=8, END=21) to throttle worker dispatch to a daily window;
+  // events received outside it stay queued until the window reopens.
+  WORK_HOURS_START: z.coerce.number().int().min(0).max(23).default(0),
+  WORK_HOURS_END: z.coerce.number().int().min(0).max(23).default(0),
   WORK_HOURS_TZ: z.string().default("Europe/Prague"),
 
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),

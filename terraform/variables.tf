@@ -57,5 +57,5 @@ variable "use_claude_subscription" {
 variable "safety_poll_interval_seconds" {
   type        = number
   default     = 900
-  description = "Safety-net poll interval for the always-on orchestrator (seconds). Webhooks drive most work; this poll catches any missed deliveries. Work-hours gating is applied in-app via WORK_HOURS_* (defaults 08:00-21:00 Europe/Prague)."
+  description = "Safety-net poll interval for the always-on orchestrator (seconds). Webhooks drive most work; this poll catches any missed deliveries. The app runs 24/7 every day by default; set WORK_HOURS_START/END (via app env) to throttle worker dispatch to a daily window."
 }
