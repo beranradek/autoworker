@@ -80,7 +80,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
 
   const criteriaText = parseCriteria(sanitizeUserContent(issueBody));
-  const maxIterations = Math.min(Math.max(parseInt(process.env.MAX_EVAL_ITERATIONS || "2", 10), 1), 5);
+  const maxIterations = Math.min(Math.max(parseInt(process.env.MAX_EVAL_ITERATIONS || "2", 10) || 2, 1), 5);
   let feedback = null;
   let evalOutcome = null;
   let lastIteration = 1;
@@ -218,6 +218,8 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   if (evalOutcome) {
     fs.writeFileSync(path.join(ARTIFACTS_DIR, "eval-result.json"), JSON.stringify(evalOutcome, null, 2), "utf8");
   }
+
+  fs.rmSync(path.join(repoDir, ".autoworker"), { recursive: true, force: true });
 
   const statusRes = await runWithRetry("git", ["status", "--porcelain"], { cwd: repoDir, env: gitEnv });
   if (statusRes.exitCode !== 0) die("git status failed", { exitCode: statusRes.exitCode });
