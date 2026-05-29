@@ -15,6 +15,10 @@ const schema = z.object({
   HEALTH_HOST: z.string().default("0.0.0.0"),
   HEALTH_PORT: z.coerce.number().int().positive().default(8080),
 
+  // Shared secret for verifying GitHub webhook payloads (X-Hub-Signature-256).
+  // Required by `serve` mode, which exposes the POST /webhook endpoint.
+  GITHUB_WEBHOOK_SECRET: z.string().optional(),
+
   WORK_HOURS_START: z.coerce.number().int().min(0).max(23).default(8),
   WORK_HOURS_END: z.coerce.number().int().min(0).max(23).default(21),
   WORK_HOURS_TZ: z.string().default("Europe/Prague"),

@@ -51,7 +51,50 @@ The `status` payload includes:
 
 - `processStartedAt`
 - `poll.startedAt`, `poll.finishedAt`, `poll.lastOkAt`, `poll.lastError`
+- `webhook` (in `serve` mode): `enabled`, `received`, `enqueued`, `processed`, `queueDepth`, `lastEventType`, `lastEventAt`, `lastProcessedRepo`, `lastProcessedAt`, `lastError`
 - `lastWorker` (last started worker): `correlationId`, `issue`, `issueUrl`, `runner`, `startedAt`, `finishedAt`, `outcome`, `error`
+
+## Webhook mode (`serve`)
+
+Instead of polling on a fixed interval, the orchestrator can react to GitHub
+webhooks. Run it as a long-lived process:
+
+```bash
+GITHUB_WEBHOOK_SECRET=... pnpm build && node dist/cli.js serve
+```
+
+`serve` mode:
+
+- Exposes `POST /webhook` (alongside `/healthz` and `/readyz`) on `HEALTH_PORT`.
+- Verifies every payload's `X-Hub-Signature-256` HMAC against `GITHUB_WEBHOOK_SECRET`
+  (requests without a valid signature get `401`). This is the security boundary.
+- Reacts to `issues`, `issue_comment`, `pull_request`, `pull_request_review`, and
+  `pull_request_review_comment` events. Each relevant event for a configured repo
+  is pushed onto an **in-memory FIFO queue** (coalesced per repo) and the
+  endpoint immediately returns `202`.
+- A consumer drains the queue and runs the normal orchestration for the affected
+  repo. Because orchestration is an idempotent, label-driven scan, one run after a
+  burst of events does the same work as one run per event.
+- Keeps a **safety-net poll** running (set `POLL_INTERVAL_SECONDS` higher than in
+  pure-poll mode, e.g. `900`). GitHub does not guarantee delivery, so the slow
+  poll catches anything missed while the endpoint was down. The webhook consumer
+  and the poll never run concurrently (a shared lock serializes them).
+
+Notes / constraints:
+
+- **Single replica only.** The FIFO queue is process-local; running more than one
+  replica would double-process events.
+- Work-hours gating (`WORK_HOURS_*`, default 08:00–21:00 Europe/Prague) applies to
+  the webhook consumer too: events received outside the window stay queued
+  (coalesced per repo) and are drained when the window reopens. Unlike the old
+  cron schedule, gating is by hour only, not weekday.
+
+Configure the webhook in GitHub (repo or org Settings → Webhooks):
+
+- Payload URL: `https://<host>/webhook`
+- Content type: `application/json`
+- Secret: the same value as `GITHUB_WEBHOOK_SECRET`
+- Events: Issues, Issue comments, Pull requests, Pull request reviews
 
 ## Env vars
 
@@ -142,8 +185,16 @@ Azure runner (`JOB_RUNNER=aca`) additionally requires:
 
 See `terraform/README.md`.
 
-Both polling server and workers run as Azure Container Apps Jobs.
-Poller runs based on cron expression schedule set in Terraform..
+The orchestrator runs as an always-on Azure **Container App** (single replica)
+in `serve` mode: it exposes a public, HMAC-verified `POST /webhook` endpoint,
+drains an in-memory FIFO queue, and keeps a relaxed safety-net poll
+(`safety_poll_interval_seconds`, default 900s). Per-issue **workers** are still
+created dynamically as Azure Container Apps Jobs.
+
+After apply, the `webhook_url` output gives the URL to register on the GitHub
+webhook (content type `application/json`, secret = the `github-webhook-secret`
+Key Vault value, events: Issues / Issue comments / Pull requests / Pull request
+reviews).
 
 Minimum variables needed (everything else has defaults):
 
@@ -155,33 +206,29 @@ export TF_VAR_github_repos="myorg/myrepo"
 terraform apply
 ```
 
-Secrets (`GITHUB_TOKEN` plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
+Secrets (`GITHUB_TOKEN`, `github-webhook-secret`, plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
 
 To use a Claude subscription instead of a provider key, set `use_claude_subscription = true` with an `anthropic/` `llm_model`, then push credentials with `scripts/opencode-auth.sh push-azure <key-vault-name>` (the `opencode-auth-json` secret). See "Claude subscription" above.
 
 ### Useful Azure commands
 
-#### Main poller app
+#### Main orchestrator app
 
-Runs and their states:
+Show the app (including its public ingress FQDN):
 
-`az containerapp job execution list --name autoworker-poller --resource-group autoworker-rg --output table`
+`az containerapp show --name autoworker-orchestrator --resource-group autoworker-rg --query properties.configuration.ingress.fqdn -o tsv`
 
-Logs of concrete run:
+Stream logs:
 
-`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --execution <execution-name> --container autoworker-server --tail 50`
+`az containerapp logs show --name autoworker-orchestrator --resource-group autoworker-rg --container autoworker-server --tail 200`
+`az containerapp logs show --name autoworker-orchestrator --resource-group autoworker-rg --container autoworker-server --follow`
 
-Logs from all runs:
+Check the webhook/health status payload:
 
-`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --tail 200`
-`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --follow`
+`curl -s https://<orchestrator-fqdn>/healthz | jq .status`
 
-Manual execution of one poll run:
-
-`az containerapp job start --name autoworker-poller --resource-group autoworker-rg`
-
-To update the env var on the job:
-`az containerapp job update --name autoworker-poller --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=beranradek/autoworker"`
+To update an env var on the app:
+`az containerapp update --name autoworker-orchestrator --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=beranradek/autoworker"`
 
 #### Worker Azure Container Apps Job (per issue)
 

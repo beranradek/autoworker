@@ -128,17 +128,19 @@ resource "azurerm_container_app_environment" "cae" {
 }
 
 # ---------------------------------------------------------------------------
-# Poller — scheduled ACA Job (runs autoworker-server image)
+# Orchestrator — always-on Container App (runs autoworker-server image in
+# `serve` mode: HMAC-verified webhook receiver + in-memory FIFO queue +
+# safety-net poll). Public ingress exposes POST /webhook for GitHub.
+#
+# Single replica only: the FIFO queue is process-local, so scaling out would
+# double-process events. min == max == 1 keeps exactly one instance running.
 # ---------------------------------------------------------------------------
 
-resource "azurerm_container_app_job" "poller" {
-  name                         = "${var.name_prefix}-poller"
-  location                     = var.location
+resource "azurerm_container_app" "orchestrator" {
+  name                         = "${var.name_prefix}-orchestrator"
   resource_group_name          = var.resource_group_name
   container_app_environment_id = azurerm_container_app_environment.cae.id
-
-  replica_timeout_in_seconds = 900
-  replica_retry_limit        = 0
+  revision_mode                = "Single"
 
   identity {
     type         = "UserAssigned"
@@ -150,10 +152,28 @@ resource "azurerm_container_app_job" "poller" {
     identity = azurerm_user_assigned_identity.autoworker.id
   }
 
+  # Public ingress so GitHub can POST webhooks. TLS is managed by the platform
+  # on the *.azurecontainerapps.io FQDN; the webhook path is /webhook.
+  ingress {
+    external_enabled = true
+    target_port      = 8080
+    transport        = "auto"
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
   # Secrets pulled from Key Vault at runtime via the UAMI — never in tfstate.
   secret {
     name                = "github-token"
     key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/github-token"
+    identity            = azurerm_user_assigned_identity.autoworker.id
+  }
+
+  secret {
+    name                = "github-webhook-secret"
+    key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/github-webhook-secret"
     identity            = azurerm_user_assigned_identity.autoworker.id
   }
 
@@ -176,11 +196,15 @@ resource "azurerm_container_app_job" "poller" {
   }
 
   template {
+    min_replicas = 1
+    max_replicas = 1
+
     container {
-      name   = "autoworker-server"
-      image  = "${azurerm_container_registry.acr.login_server}/autoworker-server:latest"
-      cpu    = 0.25
-      memory = "0.5Gi"
+      name    = "autoworker-server"
+      image   = "${azurerm_container_registry.acr.login_server}/autoworker-server:latest"
+      cpu     = 0.25
+      memory  = "0.5Gi"
+      command = ["node", "dist/cli.js", "serve"]
 
       # --- GitHub ---
       env {
@@ -190,6 +214,16 @@ resource "azurerm_container_app_job" "poller" {
       env {
         name        = "GITHUB_TOKEN"
         secret_name = "github-token"
+      }
+      env {
+        name        = "GITHUB_WEBHOOK_SECRET"
+        secret_name = "github-webhook-secret"
+      }
+
+      # --- Safety-net poll (relaxed; webhooks drive most work) ---
+      env {
+        name  = "POLL_INTERVAL_SECONDS"
+        value = tostring(var.safety_poll_interval_seconds)
       }
 
       # --- Worker ---
@@ -263,12 +297,6 @@ resource "azurerm_container_app_job" "poller" {
     }
   }
 
-  schedule_trigger_config {
-    cron_expression          = var.poll_cron
-    parallelism              = 1
-    replica_completion_count = 1
-  }
-
   lifecycle {
     precondition {
       condition     = local.use_subscription || local.llm_provider != "azure" || var.azure_resource_name != ""
@@ -304,8 +332,18 @@ output "container_app_environment_id" {
   value = azurerm_container_app_environment.cae.id
 }
 
-output "poller_job_name" {
-  value = azurerm_container_app_job.poller.name
+output "orchestrator_app_name" {
+  value = azurerm_container_app.orchestrator.name
+}
+
+output "orchestrator_fqdn" {
+  value       = azurerm_container_app.orchestrator.ingress[0].fqdn
+  description = "Public FQDN of the orchestrator Container App."
+}
+
+output "webhook_url" {
+  value       = "https://${azurerm_container_app.orchestrator.ingress[0].fqdn}/webhook"
+  description = "Set this as the Payload URL on the GitHub webhook (content type: application/json, secret: github-webhook-secret)."
 }
 
 output "secret_setup_commands" {
@@ -313,6 +351,7 @@ output "secret_setup_commands" {
     After applying, set the secrets in Key Vault (never committed to disk):
 
       az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-token --value "YOUR_GITHUB_PAT"
+      az keyvault secret set --vault-name ${azurerm_key_vault.kv.name} --name github-webhook-secret --value "YOUR_WEBHOOK_SECRET"
 
     ${local.use_subscription ?
     "Claude subscription auth (use_claude_subscription=true) — log in locally and push the\n    OpenCode credentials, instead of a provider api key:\n      scripts/opencode-auth.sh login\n      scripts/opencode-auth.sh push-azure ${azurerm_key_vault.kv.name}" :
@@ -322,6 +361,12 @@ output "secret_setup_commands" {
 
       az acr build --registry ${azurerm_container_registry.acr.name} --image autoworker-server:latest -f docker/Dockerfile .
       az acr build --registry ${azurerm_container_registry.acr.name} --image autoworker-worker:latest -f docker/worker.Dockerfile .
+
+    Finally, configure the GitHub webhook (repo or org Settings → Webhooks → Add webhook):
+      - Payload URL:  the `webhook_url` output above
+      - Content type: application/json
+      - Secret:       the same value set for github-webhook-secret
+      - Events:       Issues, Issue comments, Pull requests, Pull request reviews
   EOT
   description = "Next steps after terraform apply."
 }

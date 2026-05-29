@@ -7,7 +7,7 @@ Provisions all Azure infrastructure for Autoworker:
 - Container Apps Environment
 - User-assigned Managed Identity (Contributor on RG, AcrPull on ACR, Secrets User on Key Vault)
 - Key Vault (secrets are set manually, never stored in tfstate)
-- Container Apps Job (scheduled poller running `autoworker-server`)
+- Container App (always-on orchestrator running `autoworker-server` in `serve` mode, with public HMAC-verified webhook ingress)
 
 ## Prerequisites
 
@@ -23,13 +23,13 @@ Provisions all Azure infrastructure for Autoworker:
 | `subscription_id` | Azure subscription ID |
 | `resource_group_name` | Pre-existing resource group name |
 | `location` | Azure region (e.g. `germanywestcentral`) |
-| `github_repos` | Repos to poll, e.g. `myorg/myrepo` |
+| `github_repos` | Repos to handle, e.g. `myorg/myrepo` |
 
 All other variables have sensible defaults (see `variables.tf`).
 
 ## Secrets — never in Terraform
 
-`GITHUB_TOKEN` plus the LLM provider key are stored in Key Vault and never touch Terraform variables or `tfstate`. The provider — and therefore the secret name — is derived from the `llm_model` prefix:
+`GITHUB_TOKEN`, the GitHub webhook secret, plus the LLM provider key are stored in Key Vault and never touch Terraform variables or `tfstate`. The provider — and therefore the secret name — is derived from the `llm_model` prefix:
 
 | `llm_model` prefix | Key Vault secret | Extra |
 |--------------------|------------------|-------|
@@ -40,8 +40,9 @@ All other variables have sensible defaults (see `variables.tf`).
 Set them after the first apply (see the `secret_setup_commands` output for the exact name):
 
 ```bash
-az keyvault secret set --vault-name autoworker-kv --name github-token  --value "ghp_..."
-az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."   # or anthropic-api-key / azure-api-key
+az keyvault secret set --vault-name autoworker-kv --name github-token          --value "ghp_..."
+az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret  --value "<random-secret>"
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key         --value "sk-..."   # or anthropic-api-key / azure-api-key
 ```
 
 ## Usage
@@ -66,8 +67,9 @@ terraform apply
 ### 2. Set secrets in Key Vault (shown in terraform output `secret_setup_commands`)
 
 ```bash
-az keyvault secret set --vault-name autoworker-kv --name github-token  --value "ghp_..."
-az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."
+az keyvault secret set --vault-name autoworker-kv --name github-token          --value "ghp_..."
+az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret  --value "<random-secret>"
+az keyvault secret set --vault-name autoworker-kv --name openai-api-key         --value "sk-..."
 ```
 
 ### 3. Build and push images to ACR
@@ -80,7 +82,7 @@ az acr build --registry autoworkeracr --image autoworker-worker:latest -f docker
 
 > `az acr build` runs the build in the Azure cloud — no local Docker required.
 
-The poller job references `autoworkeracr.azurecr.io/autoworker-server:latest` and sets
+The orchestrator app references `autoworkeracr.azurecr.io/autoworker-server:latest` and sets
 `WORKER_IMAGE=autoworkeracr.azurecr.io/autoworker-worker:latest` for per-issue jobs automatically.
 
 IMPORTANT:
@@ -88,18 +90,22 @@ IMPORTANT:
 terraform apply will validate secrets in key vault and container images already exist so create the secrets and images
 and then run `terraform apply` again. 
 
-### 4. Trigger or wait for the poller
+### 4. Register the GitHub webhook
 
-The poller runs every 2 minutes by default. To trigger manually:
+Take the `webhook_url` output and add it as a webhook (repo or org Settings → Webhooks):
+
+- Payload URL: the `webhook_url` output
+- Content type: `application/json`
+- Secret: the same value set for `github-webhook-secret`
+- Events: Issues, Issue comments, Pull requests, Pull request reviews
+
+The orchestrator reacts to events immediately and also runs a safety-net poll
+(see `safety_poll_interval_seconds`, default 900s) to catch any missed delivery.
+
+## Changing poll interval or model
 
 ```bash
-az containerapp job start --name autoworker-poller --resource-group autoworker-rg
-```
-
-## Changing schedule or model
-
-```bash
-export TF_VAR_poll_cron="*/5 * * * *"
+export TF_VAR_safety_poll_interval_seconds="600"
 export TF_VAR_llm_model="openai/gpt-4o-mini"
 terraform apply
 ```
