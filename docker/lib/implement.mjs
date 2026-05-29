@@ -173,7 +173,12 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
     }
 
     if (criteriaText) {
+      // Stage new (untracked) files with intent-to-add so they appear in `git diff HEAD`.
+      // This is a read-only staging operation; we undo it immediately after diffing.
+      await runWithRetry("git", ["add", "-N", "-A"], { cwd: repoDir, env: gitEnv });
       const diffRes = await runWithRetry("git", ["diff", "HEAD"], { cwd: repoDir, env: gitEnv });
+      // Undo the intent-to-add staging so the working tree is clean for the next iteration.
+      await runWithRetry("git", ["restore", "--staged", "."], { cwd: repoDir, env: gitEnv });
       let diffText = diffRes.stdout || "";
       const DIFF_LIMIT = 15000;
       if (diffText.length > DIFF_LIMIT) {
@@ -181,6 +186,8 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
       }
 
       if (diffText.trim().length > 0) {
+        // Ensure .autoworker dir exists so the grader can write eval-result.json into it.
+        fs.mkdirSync(path.join(repoDir, ".autoworker"), { recursive: true });
         evalOutcome = await runGrader({
           criteriaText,
           diffText,
