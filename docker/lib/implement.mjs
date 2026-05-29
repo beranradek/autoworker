@@ -299,14 +299,8 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   if (ownerRepo && issueNum) {
     const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
     const prCreatedLabel = process.env.ISSUE_LABEL_PR_CREATED || "pr-created";
-    const removeRes = await runWithRetry(
-      "gh",
-      ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel],
-      { env: ghEnv }
-    );
-    if (removeRes.exitCode !== 0) {
-      log("warn", "issue.label.remove_failed", { label: inProgressLabel, exitCode: removeRes.exitCode });
-    }
+    // Add pr-created BEFORE removing in-progress so a failure leaves the issue
+    // still claimed (in-progress) rather than label-less and re-dispatchable.
     const addRes = await runWithRetry(
       "gh",
       ["issue", "edit", issueNum, "--repo", ownerRepo, "--add-label", prCreatedLabel],
@@ -314,6 +308,14 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
     );
     if (addRes.exitCode !== 0) {
       die(`Failed to add '${prCreatedLabel}' label — does it exist in the repo? Create it with: gh label create "${prCreatedLabel}" --repo ${ownerRepo}`, { exitCode: addRes.exitCode });
+    }
+    const removeRes = await runWithRetry(
+      "gh",
+      ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel],
+      { env: ghEnv }
+    );
+    if (removeRes.exitCode !== 0) {
+      log("warn", "issue.label.remove_failed", { label: inProgressLabel, exitCode: removeRes.exitCode });
     }
     log("info", "issue.labels.updated", { removed: inProgressLabel, added: prCreatedLabel });
   }
