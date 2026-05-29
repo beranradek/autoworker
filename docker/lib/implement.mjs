@@ -79,7 +79,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   const opencodeEnv = buildOpencodeEnv({ OPENAI_API_KEY, ANTHROPIC_API_KEY, AZURE_API_KEY, AZURE_RESOURCE_NAME, LLM_MODEL, opencodeDataHome });
   const opencodeTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 0);
 
-  const criteriaText = parseCriteria(issueBody);
+  const criteriaText = parseCriteria(sanitizeUserContent(issueBody));
   const maxIterations = Math.min(Math.max(parseInt(process.env.MAX_EVAL_ITERATIONS || "2", 10), 1), 5);
   let feedback = null;
   let evalOutcome = null;
@@ -172,7 +172,9 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
       // ignore
     }
 
-    if (criteriaText) {
+    // Skip grader if the implementer rejected the issue — there is nothing to evaluate.
+    const iterStatus = resultFile.ok ? String(resultFile.parsed?.status ?? "") : "";
+    if (criteriaText && iterStatus !== "rejected") {
       // Stage new (untracked) files with intent-to-add so they appear in `git diff HEAD`.
       // This is a read-only staging operation; we undo it immediately after diffing.
       await runWithRetry("git", ["add", "-N", "-A"], { cwd: repoDir, env: gitEnv });
@@ -222,7 +224,11 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   const changes = statusRes.stdout.trim().split("\n").filter(Boolean);
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "git-status-porcelain.txt"), statusRes.stdout, "utf8");
 
+  // Stage new files with intent-to-add so `git diff --stat HEAD` includes them,
+  // then immediately unstage to leave the index clean for the commit below.
+  await runWithRetry("git", ["add", "-N", "-A"], { cwd: repoDir, env: gitEnv });
   const diffStatRes = await runWithRetry("git", ["diff", "--stat", "HEAD"], { cwd: repoDir, env: gitEnv });
+  await runWithRetry("git", ["restore", "--staged", "."], { cwd: repoDir, env: gitEnv });
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "git-diff-stat.txt"), diffStatRes.stdout, "utf8");
 
   if (changes.length === 0) {
