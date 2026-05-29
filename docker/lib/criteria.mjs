@@ -19,8 +19,8 @@ export function parseCriteria(issueBody) {
   // Find the heading matching the criteria pattern
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // Match: one or more #, followed by optional spaces, then (acceptance|evaluation) criteria
-    if (/^#+\s+(acceptance|evaluation)\s+criteria/i.test(line)) {
+    // Match: two or more #, followed by optional spaces, then (acceptance|evaluation) criteria
+    if (/^##+ *(acceptance|evaluation) criteria/i.test(line)) {
       criteriaStartIndex = i;
       break;
     }
