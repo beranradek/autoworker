@@ -299,13 +299,22 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   if (ownerRepo && issueNum) {
     const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
     const prCreatedLabel = process.env.ISSUE_LABEL_PR_CREATED || "pr-created";
-    await runWithRetry(
+    const removeRes = await runWithRetry(
       "gh",
-      ["issue", "edit", issueNum, "--repo", ownerRepo,
-       "--remove-label", inProgressLabel,
-       "--add-label", prCreatedLabel],
+      ["issue", "edit", issueNum, "--repo", ownerRepo, "--remove-label", inProgressLabel],
       { env: ghEnv }
     );
+    if (removeRes.exitCode !== 0) {
+      log("warn", "issue.label.remove_failed", { label: inProgressLabel, exitCode: removeRes.exitCode });
+    }
+    const addRes = await runWithRetry(
+      "gh",
+      ["issue", "edit", issueNum, "--repo", ownerRepo, "--add-label", prCreatedLabel],
+      { env: ghEnv }
+    );
+    if (addRes.exitCode !== 0) {
+      die(`Failed to add '${prCreatedLabel}' label — does it exist in the repo? Create it with: gh label create "${prCreatedLabel}" --repo ${ownerRepo}`, { exitCode: addRes.exitCode });
+    }
     log("info", "issue.labels.updated", { removed: inProgressLabel, added: prCreatedLabel });
   }
 
