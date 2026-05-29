@@ -61,9 +61,10 @@ async function consumeWebhooks(
 export async function serve(): Promise<void> {
   const cfg = getConfig();
   if (!cfg.GITHUB_WEBHOOK_SECRET) {
-    throw new Error(
-      "serve mode requires GITHUB_WEBHOOK_SECRET to secure the POST /webhook endpoint (set it to the secret configured on the GitHub webhook)"
-    );
+    log("warn", "serve.no_webhook_secret", {
+      message:
+        "GITHUB_WEBHOOK_SECRET is not set — webhook endpoint is disabled (returns 401); polling still runs"
+    });
   }
 
   const octokit = createGitHubClient(cfg.GITHUB_TOKEN);

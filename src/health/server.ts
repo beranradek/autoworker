@@ -11,7 +11,7 @@ const WEBHOOK_PATH = "/webhook";
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // GitHub caps payloads at ~25MB; we only need small JSON.
 
 export type WebhookDeps = {
-  secret: string;
+  secret: string | undefined;
   queue: FifoQueue;
   repos: RepoRef[];
 };
@@ -60,7 +60,13 @@ async function handleWebhook(req: http.IncomingMessage, res: http.ServerResponse
     return;
   }
 
-  // Verify the HMAC signature before parsing — this is the real security boundary.
+  // Require HMAC verification. When no secret is configured, the webhook endpoint
+  // is intentionally disabled — return 401 so GitHub knows delivery failed.
+  if (!deps.secret) {
+    json(res, 401, { ok: false, error: "webhook_disabled" });
+    log("warn", "webhook.disabled", { eventType });
+    return;
+  }
   const signature = req.headers["x-hub-signature-256"] as string | undefined;
   if (!verifySignature(deps.secret, body, signature)) {
     json(res, 401, { ok: false, error: "invalid_signature" });
