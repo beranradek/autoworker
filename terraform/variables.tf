@@ -54,8 +54,8 @@ variable "use_claude_subscription" {
   description = "Use a monthly Claude subscription (OpenCode OAuth) instead of an LLM API key. When true, the poller reads the `opencode-auth-json` Key Vault secret (set via scripts/opencode-auth.sh push-azure) and injects it as OPENCODE_AUTH_JSON; no provider api-key secret is wired. Requires an anthropic/ llm_model."
 }
 
-variable "poll_cron" {
-  type        = string
-  default     = "*/2 5-19 * * 1-5"
-  description = "Cron schedule for the poller job (default: every 2 minutes, Mon-Fri 05:00-19:59 UTC)."
+variable "safety_poll_interval_seconds" {
+  type        = number
+  default     = 900
+  description = "Safety-net poll interval for the always-on orchestrator (seconds). Webhooks drive most work and run 24/7; this poll catches any missed deliveries and only runs within the work-hours window (WORK_HOURS_START/END, default 07:00-21:00) to spare cost."
 }

@@ -1,6 +1,8 @@
 # Autoworker
 
-Polls GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker container (OpenCode CLI with harness) that implements the issue and posts a PR link back to the issue.
+Watches GitHub issues across one or more repos and, when an issue contains `@worker`, claims it and runs an ephemeral AI worker container (OpenCode CLI with harness) that implements the issue and posts a PR link back to the issue.
+
+It can run in two modes: a polling loop (`poll`) or an always-on, event-driven service (`serve`) that reacts to GitHub webhooks while keeping a safety-net poll — see "Webhook mode (`serve`)" below.
 
 Supported runners:
 
@@ -51,7 +53,73 @@ The `status` payload includes:
 
 - `processStartedAt`
 - `poll.startedAt`, `poll.finishedAt`, `poll.lastOkAt`, `poll.lastError`
+- `webhook` (in `serve` mode): `enabled`, `received`, `enqueued`, `processed`, `queueDepth`, `lastEventType`, `lastEventAt`, `lastProcessedRepo`, `lastProcessedAt`, `lastError`
 - `lastWorker` (last started worker): `correlationId`, `issue`, `issueUrl`, `runner`, `startedAt`, `finishedAt`, `outcome`, `error`
+
+## Webhook mode (`serve`)
+
+Instead of polling on a fixed interval, the orchestrator can react to GitHub
+webhooks. Run it as a long-lived process:
+
+```bash
+GITHUB_WEBHOOK_SECRET=... pnpm build && node dist/cli.js serve
+```
+
+`serve` mode:
+
+- Exposes `POST /webhook` (alongside `/healthz` and `/readyz`) on `HEALTH_PORT`.
+- Verifies every payload's `X-Hub-Signature-256` HMAC against `GITHUB_WEBHOOK_SECRET`
+  (requests without a valid signature get `401`). This is the security boundary.
+- Reacts to `issues`, `issue_comment`, `pull_request`, `pull_request_review`, and
+  `pull_request_review_comment` events. Each relevant event for a configured repo
+  is pushed onto an **in-memory FIFO queue** (coalesced per repo) and the
+  endpoint immediately returns `202`.
+- A consumer drains the queue and runs the normal orchestration for the affected
+  repo. Because orchestration is an idempotent, label-driven scan, one run after a
+  burst of events does the same work as one run per event.
+- Keeps a **safety-net poll** running (set `POLL_INTERVAL_SECONDS` higher than in
+  pure-poll mode, e.g. `900`). GitHub does not guarantee delivery, so the slow
+  poll catches anything missed while the endpoint was down. The webhook consumer
+  and the poll never run concurrently (a shared lock serializes them).
+
+### Scheduling / active window
+
+- **Webhooks are processed 24/7, every day** — events trigger orchestration
+  instantly at any hour and on any weekday.
+- The **safety-net poll** runs every `POLL_INTERVAL_SECONDS` (Terraform:
+  `safety_poll_interval_seconds`, default 900s) but only within the work-hours
+  window (`WORK_HOURS_START`–`WORK_HOURS_END`, default **07:00–21:00**
+  `WORK_HOURS_TZ`, default `Europe/Prague`). Outside that window the poll pauses
+  to spare cost; anything it would have caught is still handled by webhooks (or
+  by the poll when the window reopens). The window gates by hour every day,
+  never by weekday; set `WORK_HOURS_START == WORK_HOURS_END` to disable it.
+- There is no cron schedule: the previous scheduled ACA Job (cron
+  `*/2 5-19 * * 1-5`) is replaced by an always-on Container App.
+
+Notes / constraints:
+
+- **Single replica only.** The FIFO queue is process-local; running more than one
+  replica would double-process events.
+
+### Webhook configuration
+
+The shared secret must match on both sides:
+
+1. **Key Vault** (Azure) — store the secret so the app can read it as
+   `GITHUB_WEBHOOK_SECRET` via the managed identity:
+
+   ```bash
+   az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret --value "<random-secret>"
+   ```
+
+   (Locally, just set `GITHUB_WEBHOOK_SECRET` in the environment / `.env`.)
+
+2. **GitHub** (repo or org Settings → Webhooks → Add webhook):
+
+   - Payload URL: `https://<host>/webhook` (in Azure, the `webhook_url` Terraform output)
+   - Content type: `application/json`
+   - Secret: the **same** value stored in Key Vault
+   - Events: Issues, Issue comments, Pull requests, Pull request reviews
 
 ## Env vars
 
@@ -122,15 +190,16 @@ The poller validates `OPENCODE_AUTH_JSON` before dispatching: a malformed payloa
 
 Optional:
 
-- `POLL_INTERVAL_SECONDS` (default `60`)
+- `GITHUB_WEBHOOK_SECRET` (required for `serve`/webhook mode — see "Webhook mode")
+- `POLL_INTERVAL_SECONDS` (default `60`; in `serve` mode this is the safety-net poll interval)
 - `MAX_ACCEPT_PER_RUN` (default `1`)
 - `MAX_CONCURRENT_WORKERS` (default `5`)
 - `JOB_RUNNER` (`local-docker` or `aca`)
 - `LABEL_FAILED` (default `worker-failed`)
 - `HEALTH_HOST` (default `0.0.0.0`)
 - `HEALTH_PORT` (default `8080`)
-- `WORK_HOURS_START` (default `8`)
-- `WORK_HOURS_END` (default `21`)
+- `WORK_HOURS_START` (default `7`) — applies to the **safety-net poll only**, not webhooks
+- `WORK_HOURS_END` (default `21`) — set equal to `WORK_HOURS_START` to run the poll 24/7 too
 - `WORK_HOURS_TZ` (default `Europe/Prague`)
 
 Azure runner (`JOB_RUNNER=aca`) additionally requires:
@@ -142,8 +211,16 @@ Azure runner (`JOB_RUNNER=aca`) additionally requires:
 
 See `terraform/README.md`.
 
-Both polling server and workers run as Azure Container Apps Jobs.
-Poller runs based on cron expression schedule set in Terraform..
+The orchestrator runs as an always-on Azure **Container App** (single replica)
+in `serve` mode: it exposes a public, HMAC-verified `POST /webhook` endpoint,
+drains an in-memory FIFO queue, and keeps a relaxed safety-net poll
+(`safety_poll_interval_seconds`, default 900s). Per-issue **workers** are still
+created dynamically as Azure Container Apps Jobs.
+
+After apply, the `webhook_url` output gives the URL to register on the GitHub
+webhook (content type `application/json`, secret = the `github-webhook-secret`
+Key Vault value, events: Issues / Issue comments / Pull requests / Pull request
+reviews).
 
 Minimum variables needed (everything else has defaults):
 
@@ -155,33 +232,29 @@ export TF_VAR_github_repos="myorg/myrepo"
 terraform apply
 ```
 
-Secrets (`GITHUB_TOKEN` plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
+Secrets (`GITHUB_TOKEN`, `github-webhook-secret`, plus the provider key for the selected `llm_model` — `openai-api-key`, `anthropic-api-key`, or `azure-api-key`) are set directly in Key Vault after apply — never in Terraform vars or tfstate. For `azure/<deployment>` models also set `azure_resource_name` in `terraform.tfvars`. See the `secret_setup_commands` output for the exact commands.
 
 To use a Claude subscription instead of a provider key, set `use_claude_subscription = true` with an `anthropic/` `llm_model`, then push credentials with `scripts/opencode-auth.sh push-azure <key-vault-name>` (the `opencode-auth-json` secret). See "Claude subscription" above.
 
 ### Useful Azure commands
 
-#### Main poller app
+#### Main orchestrator app
 
-Runs and their states:
+Show the app (including its public ingress FQDN):
 
-`az containerapp job execution list --name autoworker-poller --resource-group autoworker-rg --output table`
+`az containerapp show --name autoworker-orchestrator --resource-group autoworker-rg --query properties.configuration.ingress.fqdn -o tsv`
 
-Logs of concrete run:
+Stream logs:
 
-`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --execution <execution-name> --container autoworker-server --tail 50`
+`az containerapp logs show --name autoworker-orchestrator --resource-group autoworker-rg --container autoworker-server --tail 200`
+`az containerapp logs show --name autoworker-orchestrator --resource-group autoworker-rg --container autoworker-server --follow`
 
-Logs from all runs:
+Check the webhook/health status payload:
 
-`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --tail 200`
-`az containerapp job logs show --name autoworker-poller --resource-group autoworker-rg --container autoworker-server --follow`
+`curl -s https://<orchestrator-fqdn>/healthz | jq .status`
 
-Manual execution of one poll run:
-
-`az containerapp job start --name autoworker-poller --resource-group autoworker-rg`
-
-To update the env var on the job:
-`az containerapp job update --name autoworker-poller --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=beranradek/autoworker"`
+To update an env var on the app:
+`az containerapp update --name autoworker-orchestrator --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=beranradek/autoworker"`
 
 #### Worker Azure Container Apps Job (per issue)
 

@@ -16,9 +16,23 @@ export type PollStatus = {
   lastError?: string;
 };
 
+export type WebhookStatus = {
+  enabled: boolean;
+  received: number;
+  enqueued: number;
+  processed: number;
+  queueDepth: number;
+  lastEventType?: string;
+  lastEventAt?: string;
+  lastProcessedRepo?: string;
+  lastProcessedAt?: string;
+  lastError?: string;
+};
+
 export type AppStatus = {
   processStartedAt: string;
   poll: PollStatus;
+  webhook?: WebhookStatus;
   lastWorker?: WorkerLastStatus;
 };
 
@@ -74,5 +88,46 @@ export function markWorkerDoneError(correlationId: string, err: unknown): void {
   state.lastWorker.finishedAt = new Date().toISOString();
   state.lastWorker.outcome = "failed";
   state.lastWorker.error = String(err);
+}
+
+function webhook(): WebhookStatus {
+  if (!state.webhook) {
+    state.webhook = { enabled: false, received: 0, enqueued: 0, processed: 0, queueDepth: 0 };
+  }
+  return state.webhook;
+}
+
+export function setWebhookEnabled(enabled: boolean): void {
+  webhook().enabled = enabled;
+}
+
+export function markWebhookReceived(eventType: string): void {
+  const w = webhook();
+  w.received += 1;
+  w.lastEventType = eventType;
+  w.lastEventAt = new Date().toISOString();
+}
+
+export function markWebhookEnqueued(queueDepth: number): void {
+  const w = webhook();
+  w.enqueued += 1;
+  w.queueDepth = queueDepth;
+}
+
+export function setQueueDepth(queueDepth: number): void {
+  webhook().queueDepth = queueDepth;
+}
+
+export function markWebhookProcessed(repoKey: string, queueDepth: number): void {
+  const w = webhook();
+  w.processed += 1;
+  w.queueDepth = queueDepth;
+  w.lastProcessedRepo = repoKey;
+  w.lastProcessedAt = new Date().toISOString();
+  w.lastError = undefined;
+}
+
+export function markWebhookError(err: unknown): void {
+  webhook().lastError = String(err);
 }
 

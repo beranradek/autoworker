@@ -15,7 +15,15 @@ const schema = z.object({
   HEALTH_HOST: z.string().default("0.0.0.0"),
   HEALTH_PORT: z.coerce.number().int().positive().default(8080),
 
-  WORK_HOURS_START: z.coerce.number().int().min(0).max(23).default(8),
+  // Shared secret for verifying GitHub webhook payloads (X-Hub-Signature-256).
+  // Required by `serve` mode, which exposes the POST /webhook endpoint.
+  GITHUB_WEBHOOK_SECRET: z.string().optional(),
+
+  // Work-hours window for the safety-net poll only (NOT webhooks). Outside this
+  // window the periodic poll pauses to spare cost; webhook-triggered processing
+  // still runs 24/7. Gating is by hour, every day (never by weekday). Set
+  // START == END to disable the window (poll runs 24/7 too).
+  WORK_HOURS_START: z.coerce.number().int().min(0).max(23).default(7),
   WORK_HOURS_END: z.coerce.number().int().min(0).max(23).default(21),
   WORK_HOURS_TZ: z.string().default("Europe/Prague"),
 
