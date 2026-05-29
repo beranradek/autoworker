@@ -353,7 +353,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   const evalSection = evalOutcome
     ? evalOutcome.pass
       ? `\n## Evaluation\n\n✅ All acceptance criteria satisfied (iteration ${lastIteration} of ${maxIterations})`
-      : `\n## Evaluation\n\n⚠️ Acceptance criteria not fully satisfied after ${maxIterations} iteration(s):\n${evalOutcome.gaps.map(g => `- ${g}`).join("\n")}`
+      : `\n## Evaluation\n\n⚠️ Acceptance criteria not fully satisfied after ${lastIteration} iteration(s):\n${evalOutcome.gaps.map(g => `- ${g}`).join("\n")}`
     : "";
 
   const prBody = [

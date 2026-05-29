@@ -17,9 +17,12 @@ export function parseCriteria(issueBody) {
     return null;
   }
 
+  const criteriaHeadingDepth = lines[criteriaStartIndex].match(/^(#+)/)[1].length;
+  const stopPattern = new RegExp(`^#{1,${criteriaHeadingDepth}} `);
+
   const contentLines = [];
   for (let i = criteriaStartIndex + 1; i < lines.length; i++) {
-    if (/^## /.test(lines[i])) {
+    if (stopPattern.test(lines[i])) {
       break;
     }
     contentLines.push(lines[i]);
