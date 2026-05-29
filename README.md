@@ -266,7 +266,7 @@ List recent worker job executions:
 
 View logs for a specific worker job:
 
-`az containerapp job logs show --name <issue-agent-XXXXX> --resource-group autoworker-rg --tail 200`
+`az containerapp job logs show --name <issue-agent-XXXXX> --resource-group autoworker-rg --container worker --follow --tail 200`
 
 For real-time streaming, use Log Analytics (if configured):
 

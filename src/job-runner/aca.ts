@@ -1,4 +1,4 @@
-import { createAcaClient, createManualJob, startJob } from "../azure/client.js";
+import { createAcaClient, createManualJob, startJob, waitForJobAndDelete } from "../azure/client.js";
 import { log } from "../log.js";
 import type { ImplementationRunInput, ImplementationRunResult, JobRunner, PrReviewRunInput, PrReviewRunResult } from "./types.js";
 import type { ContainerAppsAPIClient } from "@azure/arm-appcontainers";
@@ -82,6 +82,9 @@ export class AcaJobRunner implements JobRunner {
     });
 
     await startJob(this.aca, this.cfg.resourceGroup, jobName);
+    waitForJobAndDelete(this.aca, this.cfg.resourceGroup, jobName).catch((err) =>
+      log("warn", "aca.cleanup_failed", { jobName, error: String(err) })
+    );
     return { runner: "aca", jobName };
   }
 
@@ -118,6 +121,9 @@ export class AcaJobRunner implements JobRunner {
     });
 
     await startJob(this.aca, this.cfg.resourceGroup, jobName);
+    waitForJobAndDelete(this.aca, this.cfg.resourceGroup, jobName).catch((err) =>
+      log("warn", "aca.cleanup_failed", { jobName, error: String(err) })
+    );
     return { runner: "aca", jobName };
   }
 }

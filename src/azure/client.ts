@@ -79,3 +79,27 @@ export async function createManualJob(client: ContainerAppsAPIClient, input: Cre
 export async function startJob(client: ContainerAppsAPIClient, resourceGroup: string, jobName: string): Promise<void> {
   await client.jobs.beginStartAndWait(resourceGroup, jobName);
 }
+
+export async function waitForJobAndDelete(
+  client: ContainerAppsAPIClient,
+  resourceGroup: string,
+  jobName: string,
+  pollIntervalMs = 15_000,
+  timeoutMs = 7_200_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const executions = client.jobsExecutions.list(resourceGroup, jobName);
+    let terminal = false;
+    for await (const exec of executions) {
+      const status = exec.status;
+      if (status === "Succeeded" || status === "Failed" || status === "Stopped") {
+        terminal = true;
+        break;
+      }
+    }
+    if (terminal) break;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+  await client.jobs.beginDeleteAndWait(resourceGroup, jobName);
+}
