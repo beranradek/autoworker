@@ -26,20 +26,24 @@ export class GitHubIssueService implements IssueService {
       { name: "help wanted", color: "008672", description: "Extra attention is needed" },
       { name: "question",    color: "d876e3", description: "Further information is requested" },
     ];
+
+    const existing = await this.octokit.paginate(this.octokit.issues.listLabelsForRepo, {
+      owner: this.repo.owner,
+      repo: this.repo.repo,
+      per_page: 100
+    });
+    const existingNames = new Set(existing.map((l) => l.name.toLowerCase()));
+
     for (const label of needed) {
-      try {
-        await this.octokit.issues.createLabel({
-          owner: this.repo.owner,
-          repo: this.repo.repo,
-          name: label.name,
-          color: label.color,
-          description: label.description
-        });
-        log("info", "label.created", { repo: `${this.repo.owner}/${this.repo.repo}`, label: label.name });
-      } catch (err: unknown) {
-        if ((err as { status?: number })?.status === 422) continue; // already exists
-        throw err;
-      }
+      if (existingNames.has(label.name.toLowerCase())) continue;
+      await this.octokit.issues.createLabel({
+        owner: this.repo.owner,
+        repo: this.repo.repo,
+        name: label.name,
+        color: label.color,
+        description: label.description
+      });
+      log("info", "label.created", { repo: `${this.repo.owner}/${this.repo.repo}`, label: label.name });
     }
   }
 
