@@ -15,6 +15,7 @@ function makeOctokit(overrides: Partial<any> = {}): any {
       merge: vi.fn().mockResolvedValue({}),
     },
     graphql: vi.fn().mockResolvedValue({ repository: { issue: { timelineItems: { nodes: [] } } } }),
+    request: vi.fn().mockResolvedValue({ data: [] }),
     ...overrides,
   };
 }
@@ -259,6 +260,73 @@ describe("GitHubIssueService – resolveState (via listIssuesByState)", () => {
     const svc = new GitHubIssueService(octokit, repo, makeConfig());
     const result = await svc.listIssuesByState("pr_created");
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("GitHubIssueService – listPendingIssues", () => {
+  it("returns only initial open issues ordered by readiness and blocksCount", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [
+            makeApiIssue({ number: 1, labels: [] }),
+            makeApiIssue({ number: 2, labels: [] }),
+            makeApiIssue({ number: 3, labels: [] }),
+          ],
+        }),
+      },
+      request: vi.fn().mockImplementation((_route: string, params: any) => {
+        const n = params.issue_number;
+        // #2 and #3 are blocked by #1 (open) -> not ready; #1 ready and blocksCount=2
+        if (n === 2 || n === 3) {
+          return Promise.resolve({ data: [{ number: 1, state: "open" }] });
+        }
+        return Promise.resolve({ data: [] });
+      }),
+    });
+
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listPendingIssues();
+    expect(result.map((r) => r.number)).toEqual([1, 2, 3]);
+    expect(result[0]).toMatchObject({ number: 1, ready: true, blocksCount: 2, blockedBy: [] });
+    expect(result[1]).toMatchObject({ number: 2, ready: false, blockedBy: [1] });
+  });
+
+  it("treats closed dependencies as satisfied (not blocking)", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [
+            makeApiIssue({ number: 10, labels: [] }),
+          ],
+        }),
+      },
+      request: vi.fn().mockResolvedValue({ data: [{ number: 1, state: "closed" }] }),
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listPendingIssues();
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ number: 10, ready: true, blockedBy: [] });
+  });
+
+  it("falls back to treating issues as unblocked when dependency API errors", async () => {
+    const octokit = makeOctokit({
+      issues: {
+        ...makeOctokit().issues,
+        listForRepo: vi.fn().mockResolvedValue({
+          data: [
+            makeApiIssue({ number: 1, labels: [] }),
+            makeApiIssue({ number: 2, labels: [] }),
+          ],
+        }),
+      },
+      request: vi.fn().mockRejectedValue(Object.assign(new Error("not available"), { status: 404 })),
+    });
+    const svc = new GitHubIssueService(octokit, repo, makeConfig());
+    const result = await svc.listPendingIssues();
+    expect(result.map((r) => r.ready)).toEqual([true, true]);
   });
 });
 

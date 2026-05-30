@@ -1,5 +1,5 @@
 import type { Octokit } from "@octokit/rest";
-import type { CloseReason, Issue, IssueState, PrInfo, PrReviewOutcome } from "./model.js";
+import type { CloseReason, Issue, IssueState, PendingIssueInfo, PrInfo, PrReviewOutcome } from "./model.js";
 import type { IssueService } from "./service.js";
 import type { RepoRef } from "../github/types.js";
 import type { Config } from "../config.js";
@@ -8,6 +8,7 @@ import { normalizeLabels } from "../github/issues.js";
 import { log } from "../log.js";
 
 export class GitHubIssueService implements IssueService {
+  private dependencyApiUnavailableLogged = false;
   constructor(private octokit: Octokit, private repo: RepoRef, private cfg: Config) {}
 
   async ensureLabels(): Promise<void> {
@@ -87,6 +88,45 @@ export class GitHubIssueService implements IssueService {
       result.push(issue);
     }
     return result;
+  }
+
+  async listPendingIssues(): Promise<PendingIssueInfo[]> {
+    const pending = await this.listIssuesByState("open");
+
+    const blockedByOpen = new Map<number, number[]>();
+
+    await Promise.all(
+      pending.map(async (issue) => {
+        const deps = await this.listOpenBlockedBy(issue.number);
+        blockedByOpen.set(issue.number, deps);
+      })
+    );
+
+    const blocksCount = new Map<number, number>();
+    for (const deps of blockedByOpen.values()) {
+      for (const dep of deps) {
+        blocksCount.set(dep, (blocksCount.get(dep) ?? 0) + 1);
+      }
+    }
+
+    const infos: PendingIssueInfo[] = pending.map((issue) => {
+      const blockedBy = blockedByOpen.get(issue.number) ?? [];
+      return {
+        number: issue.number,
+        url: issue.url,
+        title: issue.title,
+        blockedBy,
+        ready: blockedBy.length === 0,
+        blocksCount: blocksCount.get(issue.number) ?? 0
+      };
+    });
+
+    infos.sort((a, b) => {
+      if (a.ready !== b.ready) return a.ready ? -1 : 1;
+      if (a.blocksCount !== b.blocksCount) return b.blocksCount - a.blocksCount;
+      return a.number - b.number;
+    });
+    return infos;
   }
 
   async transitionTo(
@@ -274,6 +314,42 @@ export class GitHubIssueService implements IssueService {
       });
     } catch (err: unknown) {
       if ((err as { status?: number })?.status !== 404) throw err;
+    }
+  }
+
+  /**
+   * Returns only the dependencies that are still open (i.e. that currently block the issue).
+   * If dependency APIs are unavailable for the repo/org, falls back to returning [].
+   */
+  private async listOpenBlockedBy(issueNumber: number): Promise<number[]> {
+    try {
+      const res = await this.octokit.request(
+        "GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by",
+        {
+          owner: this.repo.owner,
+          repo: this.repo.repo,
+          issue_number: issueNumber,
+          per_page: 100
+        }
+      );
+
+      const items: any[] = Array.isArray((res as any).data) ? (res as any).data : [];
+      return items
+        .filter((i) => i && !i.pull_request)
+        .filter((i) => (i.state as string | undefined) !== "closed")
+        .map((i) => i.number as number)
+        .filter((n) => typeof n === "number");
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      if (!this.dependencyApiUnavailableLogged) {
+        this.dependencyApiUnavailableLogged = true;
+        log("warn", "github_service.issue_dependencies.unavailable", {
+          repo: `${this.repo.owner}/${this.repo.repo}`,
+          status: status ?? null,
+          note: "Issue dependency API unavailable; treating all issues as unblocked"
+        });
+      }
+      return [];
     }
   }
 }
