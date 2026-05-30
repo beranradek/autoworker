@@ -8,6 +8,7 @@ import {
 } from "./common.mjs";
 import { parseCriteria } from "./criteria.mjs";
 import { runGrader } from "./evaluate.mjs";
+import { emitEvent, emitEventAndWait } from "./events.mjs";
 
 async function runSingleImplementer(prompt, { repoDir, artifactsDir, opencodeEnv, timeoutMs, logSuffix }) {
   const promptPath = path.join(artifactsDir, `issue-prompt-${logSuffix}.txt`);
@@ -15,8 +16,10 @@ async function runSingleImplementer(prompt, { repoDir, artifactsDir, opencodeEnv
 
   const logPath = path.join(artifactsDir, `opencode-${logSuffix}.log`);
   log("info", "opencode.start", { model: opencodeEnv.LLM_MODEL, dir: repoDir, promptPath });
+  emitEvent("opencode.start", { model: opencodeEnv.LLM_MODEL, logSuffix });
   const ocExitCode = await spawnOpencode({ prompt, repoDir, logPath, env: opencodeEnv, timeoutMs });
   log(ocExitCode === 0 ? "info" : "warn", "opencode.done", { exitCode: ocExitCode, logPath });
+  emitEvent("opencode.done", { exitCode: ocExitCode });
 
   const resultJsonPath = path.join(repoDir, ".autoworker", "result.json");
   const resultFile = readJsonFile(resultJsonPath);
@@ -28,12 +31,15 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
     GH_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY, AZURE_API_KEY, AZURE_RESOURCE_NAME,
     OPENCODE_AUTH_JSON, LLM_MODEL, ownerRepo, issueNum, issueUrl, issueText
   } = cfg;
+  emitEvent("harness.start", { ownerRepo: ownerRepo || null, issueNum: issueNum || null, llmModel: LLM_MODEL });
+  try {
 
   if (ownerRepo) {
     fs.rmSync(CLONE_DIR, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(CLONE_DIR), { recursive: true });
     const cloneRes = await runWithRetry("gh", ["repo", "clone", ownerRepo, CLONE_DIR], { env: ghEnv });
     if (cloneRes.exitCode !== 0) die("Failed to clone repo (gh repo clone)", { exitCode: cloneRes.exitCode });
+    emitEvent("clone.done", { repoDir: CLONE_DIR });
   }
 
   const repoDir = fs.existsSync(path.join(CLONE_DIR, ".git")) ? CLONE_DIR : WORKDIR;
@@ -190,6 +196,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
       if (diffText.trim().length > 0) {
         // Ensure .autoworker dir exists so the grader can write eval-result.json into it.
         fs.mkdirSync(path.join(repoDir, ".autoworker"), { recursive: true });
+        emitEvent("grader.start", { attempt: iteration, maxIterations });
         evalOutcome = await runGrader({
           criteriaText,
           diffText,
@@ -200,6 +207,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
           timeoutMs: opencodeTimeoutMs,
           iteration
         });
+        emitEvent("grader.iteration", { pass: evalOutcome?.pass ?? false, attempt: iteration });
 
         if (evalOutcome?.pass) {
           break;
@@ -393,6 +401,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   if (!prUrl) die("Could not parse PR URL from gh pr create output", { stdout: redact(prCreateRes.stdout) });
   fs.writeFileSync(path.join(ARTIFACTS_DIR, "pr-url.txt"), prUrl, "utf8");
   log("info", "pr.create.done", { prUrl });
+  emitEvent("pr.created", { url: prUrl, branch: branchName });
 
   if (ownerRepo && issueNum) {
     const inProgressLabel = process.env.ISSUE_LABEL_IN_PROGRESS || "in-progress";
@@ -425,4 +434,10 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   }
 
   log("info", "harness.done", { prUrl, branchName });
+
+  } catch (err) {
+    await emitEventAndWait("worker.finished", { outcome: "failed", error: String(err?.message || err) });
+    throw err;
+  }
+  await emitEventAndWait("worker.finished", { outcome: "success" });
 }

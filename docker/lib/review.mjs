@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { log, die, sanitizeUserContent, readJsonFile, writeOpencodeAuth, runWithRetry, spawnOpencode, buildOpencodeEnv, buildGitWithAuth } from "./common.mjs";
+import { emitEvent, emitEventAndWait } from "./events.mjs";
 
 export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const prUrl = process.env.PR_URL || "";
@@ -15,6 +16,9 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const OPENCODE_AUTH_JSON = process.env.OPENCODE_AUTH_JSON || "";
   const LLM_MODEL = process.env.LLM_MODEL || "openai/gpt-5-mini";
 
+  try {
+
+  emitEvent("review.start", { prUrl, branch: prBranch });
   if (!prUrl) die("PR_URL is required for pr-review mode");
   if (!prBranch) die("PR_BRANCH is required for pr-review mode");
 
@@ -163,6 +167,7 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   log("info", "opencode.review.start", { model: LLM_MODEL, dir: repoDir });
   const ocExitCode = await spawnOpencode({ prompt: reviewPrompt, repoDir, logPath: reviewLogPath, env: opencodeEnv, timeoutMs: opencodeTimeoutMs });
   log(ocExitCode === 0 ? "info" : "warn", "opencode.review.done", { exitCode: ocExitCode });
+  emitEvent("opencode.done", { exitCode: ocExitCode });
 
   const reviewResultPath = path.join(repoDir, ".autoworker", "review-result.json");
   const reviewResultFile = readJsonFile(reviewResultPath);
@@ -215,6 +220,7 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
     }
     const commentBody = commentParts.join("\n");
     await runWithRetry("gh", ["pr", "comment", prNum, "--repo", ownerRepo, "--body", commentBody], { env: ghEnv });
+    emitEvent("review.posted", { prNum });
   }
 
   if (ownerRepo && issueNum) {
@@ -230,4 +236,10 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   }
 
   log("info", "harness.pr_review.done", { prNum, outcome, pushedChanges });
+
+  } catch (err) {
+    await emitEventAndWait("worker.finished", { outcome: "failed", error: String(err?.message || err) });
+    throw err;
+  }
+  await emitEventAndWait("worker.finished", { outcome: "success" });
 }

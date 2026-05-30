@@ -1,3 +1,4 @@
+import { emitLog } from "./events.mjs";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,6 +12,7 @@ export function nowIso() {
 export function log(level, msg, extra) {
   const record = { ts: nowIso(), level, msg, ...(extra ?? {}) };
   process.stderr.write(`${JSON.stringify(record)}\n`);
+  emitLog(level, msg, extra ?? {});
 }
 
 export function die(message, extra) {
