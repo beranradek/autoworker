@@ -80,6 +80,12 @@ Background helper (PID + logs in `.run/`):
 ./poller.sh stop
 ```
 
+## Orchestrator image
+
+```bash
+docker build -t autoworker:local -f docker/Dockerfile .
+```
+
 ## Worker image (OpenCode)
 
 ```bash

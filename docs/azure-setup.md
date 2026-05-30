@@ -10,7 +10,7 @@ From the `terraform/` directory, set the minimum variables and apply:
 export TF_VAR_subscription_id="<your-subscription-id>"
 export TF_VAR_resource_group_name="autoworker-rg"
 export TF_VAR_location="germanywestcentral"
-export TF_VAR_repos='[{"provider":"github","slug":"myorg/myrepo"}]'
+export TF_VAR_repos='[{"provider":"github","slug":"owner1/repo1","steps":["impl","review"]},{"provider":"github","slug":"owner2/repo2","steps":["impl","review","merge"]}]'
 terraform apply
 ```
 
