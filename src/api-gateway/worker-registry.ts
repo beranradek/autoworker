@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 
 export type WorkerMode = "implementation" | "pr-review";
+export type RunnerType = "local-docker" | "aca";
 
 export type WorkerEvent = {
   seq: number;
@@ -17,7 +18,7 @@ export type WorkerRecord = {
   mode: WorkerMode;
   issueUrl: string;
   issue: string;
-  runner: "local-docker" | "aca";
+  runner: RunnerType;
   startedAt: string;
   finishedAt?: string;
   outcome?: "success" | "failed";
@@ -32,7 +33,7 @@ export type WorkerSummary = {
   mode: WorkerMode;
   issueUrl: string;
   issue: string;
-  runner: "local-docker" | "aca";
+  runner: RunnerType;
   startedAt: string;
   finishedAt?: string;
   outcome?: "success" | "failed";
@@ -46,7 +47,7 @@ export type RegisterInput = {
   mode: WorkerMode;
   issueUrl: string;
   issue: string;
-  runner: "local-docker" | "aca";
+  runner: RunnerType;
 };
 
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -62,6 +63,18 @@ export class WorkerRegistry {
   }
 
   register(input: RegisterInput): WorkerRecord {
+    const existing = this.records.get(input.correlationId);
+    if (existing) {
+      // Clean up the old emitter before overwriting so SSE listeners attached
+      // to it do not leak.
+      existing.emitter.removeAllListeners();
+    }
+
+    const emitter = new EventEmitter();
+    // Raise the default cap (10) so that many concurrent SSE subscribers do
+    // not trigger MaxListenersExceededWarning spam in production.
+    emitter.setMaxListeners(100);
+
     const record: WorkerRecord = {
       correlationId: input.correlationId,
       mode: input.mode,
@@ -70,7 +83,7 @@ export class WorkerRegistry {
       runner: input.runner,
       startedAt: new Date().toISOString(),
       events: [],
-      emitter: new EventEmitter()
+      emitter
     };
     this.records.set(input.correlationId, record);
     return record;
