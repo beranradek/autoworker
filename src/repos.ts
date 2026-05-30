@@ -31,6 +31,11 @@ const REPOS_SCHEMA = z.array(REPO_ENTRY).min(1);
 // Auto-merge must be opted in per repo.
 const DEFAULT_STEPS: RepoSteps = { impl: true, review: true, merge: false };
 
+// parseRepos may be called every poll cycle; emit each deprecation warning at
+// most once per process so logs aren't spammed.
+let deprecationWarned = false;
+let bothSetWarned = false;
+
 function toSteps(tokens: ReadonlyArray<z.infer<typeof STEP_TOKEN>> | undefined): RepoSteps {
   if (!tokens) return { ...DEFAULT_STEPS };
   return {
@@ -53,7 +58,8 @@ function splitSlug(slug: string): { owner: string; repo: string } {
  */
 export function parseRepos(cfg: Config): RepoConfig[] {
   if (cfg.REPOS && cfg.REPOS.trim()) {
-    if (cfg.GITHUB_REPOS) {
+    if (cfg.GITHUB_REPOS && !bothSetWarned) {
+      bothSetWarned = true;
       log("warn", "repos.both_set", {
         note: "REPOS and GITHUB_REPOS are both set; REPOS wins. GITHUB_REPOS is deprecated."
       });
@@ -81,9 +87,12 @@ export function parseRepos(cfg: Config): RepoConfig[] {
   }
 
   if (cfg.GITHUB_REPOS && cfg.GITHUB_REPOS.trim()) {
-    log("warn", "repos.deprecated_github_repos", {
-      note: "GITHUB_REPOS + STEP_* env vars are deprecated; migrate to REPOS (JSON). See README."
-    });
+    if (!deprecationWarned) {
+      deprecationWarned = true;
+      log("warn", "repos.deprecated_github_repos", {
+        note: "GITHUB_REPOS + STEP_* env vars are deprecated; migrate to REPOS (JSON). See README."
+      });
+    }
     const legacySteps: RepoSteps = {
       impl: cfg.STEP_IMPLEMENTATION,
       review: cfg.STEP_PR_REVIEW,

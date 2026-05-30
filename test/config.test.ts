@@ -253,6 +253,34 @@ describe("getConfig", () => {
     );
   });
 
+  it("rejects malformed REPOS JSON at startup", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        REPOS: "{not json",
+        JOB_RUNNER: "local-docker",
+        DRY_RUN: "true"
+      },
+      () => {
+        expect(() => getConfig()).toThrow(/REPOS is not valid JSON/);
+      }
+    );
+  });
+
+  it("rejects structurally-invalid REPOS at startup (unknown provider)", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        REPOS: '[{"provider":"bitbucket","slug":"o/r"}]',
+        JOB_RUNNER: "local-docker",
+        DRY_RUN: "true"
+      },
+      () => {
+        expect(() => getConfig()).toThrow(/Invalid REPOS/);
+      }
+    );
+  });
+
   it("accepts configuration where PR_REVIEW_WORKER_IMAGE overrides WORKER_IMAGE when both are present", () => {
     withEnv(
       {

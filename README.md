@@ -173,6 +173,6 @@ See [docs/azure-setup.md](docs/azure-setup.md) for full setup, post-deploy secre
 export TF_VAR_subscription_id="<your-subscription-id>"
 export TF_VAR_resource_group_name="autoworker-rg"
 export TF_VAR_location="germanywestcentral"
-export TF_VAR_github_repos="myorg/myrepo"
+export TF_VAR_repos='[{"provider":"github","slug":"myorg/myrepo"}]'
 terraform apply
 ```

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseRepos } from "./repos.js";
 
 const schema = z.object({
   GH_TOKEN: z.string().optional(),
@@ -148,5 +149,9 @@ export function getConfig(): Config {
       );
     }
   }
-  return parsed.data as Config;
+  const cfg = parsed.data as Config;
+  // Eagerly parse + schema-validate REPOS so JSON/structure errors surface at
+  // startup rather than on the first poll cycle.
+  parseRepos(cfg);
+  return cfg;
 }

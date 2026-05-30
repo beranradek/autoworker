@@ -211,10 +211,20 @@ resource "azurerm_container_app" "orchestrator" {
       memory  = "0.5Gi"
       command = ["node", "dist/cli.js", "serve"]
 
-      # --- GitHub ---
-      env {
-        name  = "GITHUB_REPOS"
-        value = var.github_repos
+      # --- GitHub / repos ---
+      dynamic "env" {
+        for_each = var.repos != null ? [1] : []
+        content {
+          name  = "REPOS"
+          value = var.repos
+        }
+      }
+      dynamic "env" {
+        for_each = var.repos == null && var.github_repos != null ? [1] : []
+        content {
+          name  = "GITHUB_REPOS"
+          value = var.github_repos
+        }
       }
       env {
         name        = "GITHUB_TOKEN"
