@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { makeBearerAuth, safeCompare } from "../auth.js";
+import { safeCompare } from "../auth.js";
 import type { WorkerRegistry, WorkerEvent } from "../worker-registry.js";
 
 type DashboardPluginOpts = { registry: WorkerRegistry; apiKey: string };
@@ -376,9 +376,28 @@ export const dashboardRoutes: FastifyPluginAsync<DashboardPluginOpts> = async (f
 
   fastify.get(
     "/dashboard/workers",
-    { preHandler: makeBearerAuth(apiKey) },
-    async (req: FastifyRequest, reply: FastifyReply) => {
+    async (
+      req: FastifyRequest<{ Querystring: { api_key?: string } }>,
+      reply: FastifyReply
+    ) => {
+      const bearer = ((req.headers.authorization as string | undefined) ?? "").startsWith("Bearer ")
+        ? ((req.headers.authorization as string).slice(7) ?? "")
+        : "";
+      const cookies = parseCookies(req.headers.cookie as string | undefined);
+      const cookieToken = cookies[COOKIE_NAME] ?? "";
+      const queryToken = req.query.api_key ?? "";
+
+      const ok = safeCompare(bearer, apiKey) || safeCompare(cookieToken, apiKey) || safeCompare(queryToken, apiKey);
+      if (!ok) {
+        return reply.code(401).send({ ok: false, error: "unauthorized" });
+      }
+
       setCookie(reply, COOKIE_NAME, apiKey, { secure: isHttps(req), path: "/dashboard" });
+
+      // If authenticated via query param, redirect to a clean URL to reduce
+      // accidental sharing of the secret in copy/pastes.
+      if (queryToken) return reply.redirect(302, "/dashboard/workers");
+
       return reply.type("text/html; charset=utf-8").send(buildHtml());
     }
   );
@@ -445,4 +464,3 @@ export const dashboardRoutes: FastifyPluginAsync<DashboardPluginOpts> = async (f
     }
   );
 };
-
