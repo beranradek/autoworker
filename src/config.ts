@@ -25,6 +25,8 @@ const schema = z.object({
   // Shared secret for verifying GitHub webhook payloads (X-Hub-Signature-256).
   // Required by `serve` mode, which exposes the POST /webhook endpoint.
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
+  API_KEY: z.string().optional(),
+  ORCHESTRATOR_INTERNAL_URL: z.string().optional(),
 
   // Work-hours window for the safety-net poll only (NOT webhooks). Outside this
   // window the periodic poll pauses to spare cost; webhook-triggered processing

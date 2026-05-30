@@ -298,4 +298,50 @@ describe("getConfig", () => {
       }
     );
   });
+
+  it("accepts API_KEY in config", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        DRY_RUN: "true",
+        API_KEY: "my-secret-api-key"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.API_KEY).toBe("my-secret-api-key");
+      }
+    );
+  });
+
+  it("accepts ORCHESTRATOR_INTERNAL_URL in config", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        DRY_RUN: "true",
+        API_KEY: "key",
+        ORCHESTRATOR_INTERNAL_URL: "http://host.docker.internal:8080"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.ORCHESTRATOR_INTERNAL_URL).toBe("http://host.docker.internal:8080");
+      }
+    );
+  });
+
+  it("ORCHESTRATOR_INTERNAL_URL defaults to undefined when not set", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        DRY_RUN: "true",
+        API_KEY: "key"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.ORCHESTRATOR_INTERNAL_URL).toBeUndefined();
+      }
+    );
+  });
 });
