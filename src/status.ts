@@ -1,14 +1,3 @@
-export type WorkerLastStatus = {
-  correlationId: string;
-  issue: string;
-  issueUrl: string;
-  runner: "local-docker" | "aca";
-  startedAt: string;
-  finishedAt?: string;
-  outcome?: "success" | "failed";
-  error?: string;
-};
-
 export type PollStatus = {
   startedAt?: string;
   finishedAt?: string;
@@ -33,7 +22,6 @@ export type AppStatus = {
   processStartedAt: string;
   poll: PollStatus;
   webhook?: WebhookStatus;
-  lastWorker?: WorkerLastStatus;
 };
 
 const state: AppStatus = {
@@ -59,35 +47,6 @@ export function markPollDoneOk(): void {
 export function markPollDoneError(err: unknown): void {
   state.poll.finishedAt = new Date().toISOString();
   state.poll.lastError = String(err);
-}
-
-export function markWorkerStart(input: {
-  correlationId: string;
-  issue: string;
-  issueUrl: string;
-  runner: "local-docker" | "aca";
-}): void {
-  state.lastWorker = {
-    correlationId: input.correlationId,
-    issue: input.issue,
-    issueUrl: input.issueUrl,
-    runner: input.runner,
-    startedAt: new Date().toISOString()
-  };
-}
-
-export function markWorkerDoneOk(correlationId: string): void {
-  if (!state.lastWorker || state.lastWorker.correlationId !== correlationId) return;
-  state.lastWorker.finishedAt = new Date().toISOString();
-  state.lastWorker.outcome = "success";
-  state.lastWorker.error = undefined;
-}
-
-export function markWorkerDoneError(correlationId: string, err: unknown): void {
-  if (!state.lastWorker || state.lastWorker.correlationId !== correlationId) return;
-  state.lastWorker.finishedAt = new Date().toISOString();
-  state.lastWorker.outcome = "failed";
-  state.lastWorker.error = String(err);
 }
 
 function webhook(): WebhookStatus {
@@ -130,4 +89,3 @@ export function markWebhookProcessed(repoKey: string, queueDepth: number): void 
 export function markWebhookError(err: unknown): void {
   webhook().lastError = String(err);
 }
-
