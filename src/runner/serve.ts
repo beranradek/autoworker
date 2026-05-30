@@ -42,7 +42,7 @@ async function consumeWebhooks(
     log("info", "webhook.process_start", { repo: job.repoKey, reason: job.reason });
     try {
       const service = new GitHubIssueService(octokit, job.repo, cfg);
-      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, job.steps));
+      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, job.steps, workerRegistry));
       markWebhookProcessed(job.repoKey, queue.depth);
       log("info", "webhook.process_done", { repo: job.repoKey });
     } catch (err) {

@@ -3,13 +3,15 @@ import type { IssueService } from "../issues/service.js";
 import type { JobRunner } from "../job-runner/types.js";
 import type { RepoSteps } from "../repos.js";
 import { log } from "../log.js";
+import type { WorkerRegistry } from "../api-gateway/worker-registry.js";
 
 export async function runOrchestration(
   service: IssueService,
   runner: JobRunner,
   cfg: Config,
   repoKey: string,
-  steps: RepoSteps
+  steps: RepoSteps,
+  registry?: WorkerRegistry
 ): Promise<void> {
   await service.ensureLabels();
 
@@ -49,7 +51,7 @@ export async function runOrchestration(
         const correlationId = `pr-review-${repoKey.replace("/", "-")}-${issue.number}-${Date.now()}`;
         await service.markInReview(issue);
         try {
-          await runner.runPrReview({
+          const result = await runner.runPrReview({
             issueUrl: issue.url,
             prUrl: pr.url,
             prBranch: pr.branch,
@@ -66,6 +68,13 @@ export async function runOrchestration(
             labelInReview: cfg.LABEL_IN_REVIEW,
             labelPrReviewed: cfg.LABEL_PR_REVIEWED,
             labelHumanNeeded: cfg.LABEL_HUMAN_NEEDED
+          });
+          registry?.register({
+            correlationId,
+            mode: "pr-review",
+            issueUrl: issue.url,
+            issue: `${repoKey}#${issue.number}`,
+            runner: result.runner
           });
         } catch (runErr) {
           // Roll back the in-review label so the next poll can retry dispatch.
@@ -121,7 +130,7 @@ export async function runOrchestration(
         // another orchestrator instance. If dispatch fails, roll back the label
         // so the next poll can retry.
         await service.transitionTo(issue, "in_progress");
-        await runner.runIssue({
+        const result = await runner.runIssue({
           issueUrl: issue.url,
           githubToken: cfg.GITHUB_TOKEN,
           openaiApiKey: cfg.OPENAI_API_KEY,
@@ -134,6 +143,13 @@ export async function runOrchestration(
           llmModel: cfg.LLM_MODEL,
           labelInProgress: cfg.LABEL_IN_PROGRESS,
           labelPrCreated: cfg.LABEL_PR_CREATED
+        });
+        registry?.register({
+          correlationId,
+          mode: "implementation",
+          issueUrl: issue.url,
+          issue: issueKey,
+          runner: result.runner
         });
         log("info", "orchestrate.impl.dispatched", { repo: repoKey, issue: issueKey, correlationId });
         accepted++;
