@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { log } from "../../log.js";
-import { markWebhookEnqueued, markWebhookReceived } from "../../status.js";
+import { markWebhookEnqueued, markWebhookError, markWebhookReceived } from "../../status.js";
 import { parseWebhookEvent } from "../../webhook/events.js";
 import { verifySignature } from "../../webhook/verify.js";
 import type { FifoQueue } from "../../webhook/queue.js";
@@ -16,6 +16,16 @@ type WebhookPluginOpts = { deps: WebhookDeps };
 
 export const webhookRoutes: FastifyPluginAsync<WebhookPluginOpts> = async (fastify, opts) => {
   const { deps } = opts;
+
+  // Propagate unexpected handler errors to webhook error metrics so they remain
+  // visible in the /healthz status payload (mirrors original server.ts behaviour).
+  fastify.setErrorHandler((err, _req, reply) => {
+    markWebhookError(err);
+    log("error", "webhook.handler_error", { error: String(err) });
+    if (!reply.sent) {
+      reply.code(500).send({ ok: false, error: "internal_error" });
+    }
+  });
 
   // Parse body as raw Buffer so we can HMAC-verify the original bytes.
   fastify.addContentTypeParser(
@@ -47,8 +57,8 @@ export const webhookRoutes: FastifyPluginAsync<WebhookPluginOpts> = async (fasti
     let payload: unknown;
     try {
       payload = JSON.parse(req.body.toString("utf8"));
-    } catch {
-      log("warn", "webhook.invalid_json", { eventType });
+    } catch (err) {
+      log("warn", "webhook.invalid_json", { eventType, error: String(err) });
       return reply.code(400).send({ ok: false, error: "invalid_json" });
     }
 
@@ -61,7 +71,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookPluginOpts> = async (fasti
       (r) => r.provider === "github" && `${r.owner}/${r.repo}`.toLowerCase() === parsed.repoFullName.toLowerCase()
     );
     if (!repo) {
-      log("warn", "webhook.repo_not_configured", { repo: parsed.repoFullName });
+      log("warn", "webhook.repo_not_configured", { repo: parsed.repoFullName, event: parsed.summary });
       return reply.code(202).send({ ok: true, queued: false, reason: "repo_not_configured" });
     }
 
@@ -75,7 +85,7 @@ export const webhookRoutes: FastifyPluginAsync<WebhookPluginOpts> = async (fasti
     });
     if (queued) markWebhookEnqueued(deps.queue.depth);
 
-    log("info", "webhook.received", { repo: repoKey, event: parsed.summary, queued });
+    log("info", "webhook.received", { repo: repoKey, event: parsed.summary, queued, queueDepth: deps.queue.depth });
     return reply.code(202).send({ ok: true, queued });
   });
 };

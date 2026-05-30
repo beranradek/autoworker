@@ -1,17 +1,32 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-function pad(a: string, b: string): [Buffer, Buffer] {
-  const len = Math.max(Buffer.byteLength(a), Buffer.byteLength(b));
+/**
+ * Constant-time string comparison that is safe against timing attacks even when
+ * the two inputs differ in byte length.  Both strings are encoded to UTF-8 and
+ * zero-padded to the same length *before* the constant-time compare so that:
+ * 1. `timingSafeEqual` always receives equal-length buffers (required by Node.js).
+ * 2. An empty `expected` value never matches any token (guards against an
+ *    unconfigured API_KEY defaulting to `""` and thereby bypassing auth).
+ */
+export function safeCompare(a: string, b: string): boolean {
+  // Reject immediately when the expected secret is empty – an unconfigured key
+  // must never authenticate anything.
+  if (!b) return false;
+
+  // Encode both strings and pad the shorter one with zeros so both buffers have
+  // the same length.  Buffer.alloc() already zero-fills, so writing only the
+  // shorter string's bytes leaves the tail as zeros – identical for both
+  // buffers when the strings match.  timingSafeEqual then compares in O(len).
+  const la = Buffer.byteLength(a);
+  const lb = Buffer.byteLength(b);
+  const len = Math.max(la, lb);
   const ba = Buffer.alloc(len);
   const bb = Buffer.alloc(len);
-  ba.write(a);
-  bb.write(b);
-  return [ba, bb];
-}
-
-export function safeCompare(a: string, b: string): boolean {
-  const [ba, bb] = pad(a, b);
+  // Use copy() instead of write() so the copy length is always `len` worth of
+  // work: we write the source bytes and leave the rest as the zeros from alloc.
+  Buffer.from(a).copy(ba);
+  Buffer.from(b).copy(bb);
   return timingSafeEqual(ba, bb);
 }
 
