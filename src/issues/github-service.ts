@@ -95,12 +95,19 @@ export class GitHubIssueService implements IssueService {
 
     const blockedByOpen = new Map<number, number[]>();
 
-    await Promise.all(
-      pending.map(async (issue) => {
+    // Avoid bursting GitHub API with up to 100 concurrent dependency requests.
+    const CONCURRENCY = 8;
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, pending.length) }, async () => {
+      while (true) {
+        const i = idx++;
+        if (i >= pending.length) return;
+        const issue = pending[i]!;
         const deps = await this.listOpenBlockedBy(issue.number);
         blockedByOpen.set(issue.number, deps);
-      })
-    );
+      }
+    });
+    await Promise.all(workers);
 
     const blocksCount = new Map<number, number>();
     for (const deps of blockedByOpen.values()) {
