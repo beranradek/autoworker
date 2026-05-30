@@ -93,6 +93,15 @@ az acr build --registry autoworkeracr --image autoworker-worker:latest -f docker
 The orchestrator app references `autoworkeracr.azurecr.io/autoworker-server:latest` and sets
 `WORKER_IMAGE=autoworkeracr.azurecr.io/autoworker-worker:latest` for per-issue jobs automatically.
 
+After rebuilding the orchestrator image, force the Container App to pull it by creating a new revision:
+
+```bash
+az containerapp update --name autoworker-orchestrator --resource-group autoworker-rg \
+  --image autoworkeracr.azurecr.io/autoworker-server:latest
+```
+
+> `az containerapp revision restart` does **not** pull a new image — use `az containerapp update` instead.
+
 IMPORTANT:
 
 terraform apply will validate secrets in key vault and container images already exist so create the secrets and images
