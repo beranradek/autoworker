@@ -300,6 +300,10 @@ function ensureStreams(){
         const ev = JSON.parse(msg.data);
         const line = formatEvent(ev);
         if (line) appendLine(w.correlationId, line);
+        if (ev && ev.type === "stream.closed"){
+          try{ es.close(); }catch{}
+          state.streams.delete(w.correlationId);
+        }
       }catch(e){
         appendLine(w.correlationId, "[ui] failed to parse event: " + String(e));
       }
