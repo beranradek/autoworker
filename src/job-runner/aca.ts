@@ -14,6 +14,8 @@ export type AcaRunnerConfig = {
   tenantId?: string;
   clientId?: string;
   clientSecret?: string;
+  orchestratorInternalUrl?: string;
+  internalWorkerSecret?: string;
 };
 
 function envId(subscriptionId: string, resourceGroup: string, envName: string): string {
@@ -77,7 +79,9 @@ export class AcaJobRunner implements JobRunner {
         ISSUE_URL: input.issueUrl,
         ...(input.labelInProgress ? { ISSUE_LABEL_IN_PROGRESS: input.labelInProgress } : {}),
         ...(input.labelPrCreated ? { ISSUE_LABEL_PR_CREATED: input.labelPrCreated } : {}),
-        CORRELATION_ID: input.correlationId
+        CORRELATION_ID: input.correlationId,
+        ...(this.cfg.orchestratorInternalUrl ? { ORCHESTRATOR_INTERNAL_URL: this.cfg.orchestratorInternalUrl } : {}),
+        ...(this.cfg.internalWorkerSecret ? { INTERNAL_WORKER_SECRET: this.cfg.internalWorkerSecret } : {})
       }
     });
 
@@ -116,7 +120,9 @@ export class AcaJobRunner implements JobRunner {
         ISSUE_URL: input.issueUrl,
         ...(input.labelInReview ? { ISSUE_LABEL_IN_REVIEW: input.labelInReview } : {}),
         ...(input.labelPrReviewed ? { ISSUE_LABEL_PR_REVIEWED: input.labelPrReviewed } : {}),
-        ...(input.labelHumanNeeded ? { ISSUE_LABEL_HUMAN_NEEDED: input.labelHumanNeeded } : {})
+        ...(input.labelHumanNeeded ? { ISSUE_LABEL_HUMAN_NEEDED: input.labelHumanNeeded } : {}),
+        ...(this.cfg.orchestratorInternalUrl ? { ORCHESTRATOR_INTERNAL_URL: this.cfg.orchestratorInternalUrl } : {}),
+        ...(this.cfg.internalWorkerSecret ? { INTERNAL_WORKER_SECRET: this.cfg.internalWorkerSecret } : {})
       }
     });
 

@@ -5,6 +5,11 @@ import type { ImplementationRunInput, ImplementationRunResult, JobRunner, PrRevi
 
 export type SpawnFn = typeof spawn;
 
+export type LocalDockerRunnerOpts = {
+  orchestratorInternalUrl?: string;
+  internalWorkerSecret?: string;
+};
+
 function sanitizeContainerName(id: string): string {
   const sanitized = id
     .toLowerCase()
@@ -24,7 +29,10 @@ function openLogStdio(correlationId: string): number | "ignore" {
 }
 
 export class LocalDockerJobRunner implements JobRunner {
-  constructor(private readonly spawnFn: SpawnFn = spawn) {}
+  constructor(
+    private readonly spawnFn: SpawnFn = spawn,
+    private readonly opts: LocalDockerRunnerOpts = {}
+  ) {}
 
   runIssue(input: ImplementationRunInput): Promise<ImplementationRunResult> {
     const containerName = sanitizeContainerName(input.correlationId);
@@ -56,9 +64,11 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `ISSUE_URL=${input.issueUrl}`,
       "-e",
-      `CORRELATION_ID=${input.correlationId}`,
-      input.workerImage
+      `CORRELATION_ID=${input.correlationId}`
     );
+    if (this.opts.orchestratorInternalUrl) args.push("-e", `ORCHESTRATOR_INTERNAL_URL=${this.opts.orchestratorInternalUrl}`);
+    if (this.opts.internalWorkerSecret) args.push("-e", `INTERNAL_WORKER_SECRET=${this.opts.internalWorkerSecret}`);
+    args.push(input.workerImage);
 
     log("info", "local_docker.start", { correlationId: input.correlationId, image: input.workerImage });
 
@@ -111,9 +121,11 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `BASE_BRANCH=${input.baseBranch}`,
       "-e",
-      `ISSUE_URL=${input.issueUrl}`,
-      input.workerImage
+      `ISSUE_URL=${input.issueUrl}`
     );
+    if (this.opts.orchestratorInternalUrl) args.push("-e", `ORCHESTRATOR_INTERNAL_URL=${this.opts.orchestratorInternalUrl}`);
+    if (this.opts.internalWorkerSecret) args.push("-e", `INTERNAL_WORKER_SECRET=${this.opts.internalWorkerSecret}`);
+    args.push(input.workerImage);
 
     log("info", "local_docker.start", { correlationId: input.correlationId, image: input.workerImage });
 

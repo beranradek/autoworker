@@ -412,4 +412,61 @@ describe("LocalDockerJobRunner", () => {
     expect(containerName).toMatch(/^[a-z0-9]/);
     expect(containerName.length).toBeGreaterThan(0);
   });
+
+  it("runIssue injects ORCHESTRATOR_INTERNAL_URL and INTERNAL_WORKER_SECRET when provided", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub, {
+      orchestratorInternalUrl: "http://host.docker.internal:8080",
+      internalWorkerSecret: "abc123"
+    });
+
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).toContain("ORCHESTRATOR_INTERNAL_URL=http://host.docker.internal:8080");
+    expect(joined).toContain("INTERNAL_WORKER_SECRET=abc123");
+  });
+
+  it("runIssue omits ORCHESTRATOR_INTERNAL_URL and INTERNAL_WORKER_SECRET when not provided", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runIssue({
+      issueUrl: "https://github.com/o/r/issues/1",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "c1"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).not.toContain("ORCHESTRATOR_INTERNAL_URL");
+    expect(joined).not.toContain("INTERNAL_WORKER_SECRET");
+  });
+
+  it("runPrReview injects ORCHESTRATOR_INTERNAL_URL and INTERNAL_WORKER_SECRET when provided", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub, {
+      orchestratorInternalUrl: "http://host.docker.internal:9090",
+      internalWorkerSecret: "xyz789"
+    });
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/2",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "pr-c1"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).toContain("ORCHESTRATOR_INTERNAL_URL=http://host.docker.internal:9090");
+    expect(joined).toContain("INTERNAL_WORKER_SECRET=xyz789");
+  });
 });

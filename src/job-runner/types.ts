@@ -11,6 +11,8 @@ export type ImplementationRunInput = {
   llmModel?: string;
   labelInProgress?: string;
   labelPrCreated?: string;
+  orchestratorInternalUrl?: string;
+  internalWorkerSecret?: string;
 };
 
 export type ImplementationRunResult = {
@@ -35,6 +37,8 @@ export type PrReviewRunInput = {
   labelInReview?: string;
   labelPrReviewed?: string;
   labelHumanNeeded?: string;
+  orchestratorInternalUrl?: string;
+  internalWorkerSecret?: string;
 };
 
 export type PrReviewRunResult = {

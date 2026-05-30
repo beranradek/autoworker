@@ -6,6 +6,8 @@ import { GitHubIssueService } from "../issues/github-service.js";
 import { AcaJobRunner } from "../job-runner/aca.js";
 import { LocalDockerJobRunner } from "../job-runner/local-docker.js";
 import type { JobRunner } from "../job-runner/types.js";
+import { internalWorkerSecret } from "../api-gateway/internal-secret.js";
+import { workerRegistry } from "../api-gateway/worker-registry.js";
 import { validateOpencodeAuthJson } from "../opencode-auth.js";
 import { parseRepos } from "../repos.js";
 import { runOrchestration } from "./orchestrate.js";
@@ -14,20 +16,38 @@ export { parseRepos };
 
 /** Construct the configured job runner (local Docker or Azure Container Apps). */
 export function buildRunner(cfg: Config): JobRunner {
-  return cfg.JOB_RUNNER === "aca"
-    ? new AcaJobRunner({
-        subscriptionId: cfg.AZURE_SUBSCRIPTION_ID!,
-        resourceGroup: cfg.AZURE_RESOURCE_GROUP!,
-        location: cfg.AZURE_LOCATION!,
-        environmentName: cfg.ACA_ENV_NAME!,
-        jobNamePrefix: cfg.ACA_JOB_NAME,
-        useManagedIdentity: cfg.AZURE_USE_MANAGED_IDENTITY,
-        uamiId: cfg.AZURE_UAMI_ID,
-        tenantId: cfg.AZURE_TENANT_ID,
-        clientId: cfg.AZURE_CLIENT_ID,
-        clientSecret: cfg.AZURE_CLIENT_SECRET
-      })
-    : new LocalDockerJobRunner();
+  const orchUrl =
+    cfg.JOB_RUNNER === "local-docker"
+      ? (cfg.ORCHESTRATOR_INTERNAL_URL ?? `http://host.docker.internal:${cfg.HEALTH_PORT}`)
+      : cfg.ORCHESTRATOR_INTERNAL_URL;
+
+  if (cfg.JOB_RUNNER === "aca") {
+    if (!orchUrl) {
+      log("warn", "runner.no_orchestrator_url", {
+        runner: "aca",
+        note: "ORCHESTRATOR_INTERNAL_URL not set; worker event streaming disabled"
+      });
+    }
+    return new AcaJobRunner({
+      subscriptionId: cfg.AZURE_SUBSCRIPTION_ID!,
+      resourceGroup: cfg.AZURE_RESOURCE_GROUP!,
+      location: cfg.AZURE_LOCATION!,
+      environmentName: cfg.ACA_ENV_NAME!,
+      jobNamePrefix: cfg.ACA_JOB_NAME,
+      useManagedIdentity: cfg.AZURE_USE_MANAGED_IDENTITY,
+      uamiId: cfg.AZURE_UAMI_ID,
+      tenantId: cfg.AZURE_TENANT_ID,
+      clientId: cfg.AZURE_CLIENT_ID,
+      clientSecret: cfg.AZURE_CLIENT_SECRET,
+      orchestratorInternalUrl: orchUrl,
+      internalWorkerSecret
+    });
+  }
+
+  return new LocalDockerJobRunner(undefined, {
+    orchestratorInternalUrl: orchUrl,
+    internalWorkerSecret
+  });
 }
 
 /**
@@ -81,7 +101,7 @@ export async function runOnce(): Promise<void> {
     log("info", "poll.repo_start", { repo: repoKey, steps: repo.steps });
     try {
       const service = new GitHubIssueService(octokit, { owner: repo.owner, repo: repo.repo }, cfg);
-      await runOrchestration(service, runner, cfg, repoKey, repo.steps);
+      await runOrchestration(service, runner, cfg, repoKey, repo.steps, workerRegistry);
     } catch (err) {
       log("error", "poll.repo_error", { repo: repoKey, error: String(err) });
     }
