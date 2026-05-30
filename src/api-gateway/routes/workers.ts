@@ -60,7 +60,10 @@ export const workersRoutes: FastifyPluginAsync<WorkersPluginOpts> = async (fasti
 
       const heartbeat = setInterval(() => sendFrame(raw, { type: "heartbeat" }), 15_000);
 
+      let closed = false;
       function cleanup() {
+        if (closed) return;
+        closed = true;
         clearInterval(heartbeat);
         workerRecord.emitter.off("event", onEvent);
         workerRecord.emitter.off("finished", onFinished);

@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/api-gateway/server.js";
 import { WorkerRegistry } from "../src/api-gateway/worker-registry.js";
 
@@ -13,32 +14,40 @@ describe("GET /healthz", () => {
   it("returns 200 with ok: true (no auth required)", async () => {
     const registry = new WorkerRegistry();
     const app = makeApp(registry);
-    const res = await app.inject({ method: "GET", url: "/healthz" });
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toMatchObject({ ok: true });
-    registry.destroy();
+    try {
+      const res = await app.inject({ method: "GET", url: "/healthz" });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toMatchObject({ ok: true });
+    } finally {
+      await app.close();
+      registry.destroy();
+    }
   });
 });
 
 describe("GET /api/workers", () => {
   let registry: WorkerRegistry;
-  beforeEach(() => { registry = new WorkerRegistry(); });
-  afterEach(() => { registry.destroy(); });
+  let app: FastifyInstance;
+  beforeEach(() => {
+    registry = new WorkerRegistry();
+    app = makeApp(registry);
+  });
+  afterEach(async () => {
+    await app.close();
+    registry.destroy();
+  });
 
   it("returns 401 without Authorization header", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({ method: "GET", url: "/api/workers" });
     expect(res.statusCode).toBe(401);
   });
 
   it("returns 401 with wrong bearer token", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({ method: "GET", url: "/api/workers", headers: { authorization: "Bearer wrong" } });
     expect(res.statusCode).toBe(401);
   });
 
   it("returns 200 with correct bearer token", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({ method: "GET", url: "/api/workers", headers: { authorization: `Bearer ${API_KEY}` } });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toMatchObject({ workers: [] });
@@ -46,7 +55,6 @@ describe("GET /api/workers", () => {
 
   it("includes registered workers in the list", async () => {
     registry.register({ correlationId: "c1", mode: "implementation", issueUrl: "u", issue: "o/r#1", runner: "local-docker" });
-    const app = makeApp(registry);
     const res = await app.inject({ method: "GET", url: "/api/workers", headers: { authorization: `Bearer ${API_KEY}` } });
     const body = JSON.parse(res.body);
     expect(body.workers).toHaveLength(1);
@@ -57,11 +65,17 @@ describe("GET /api/workers", () => {
 
 describe("POST /internal/workers/:id/events", () => {
   let registry: WorkerRegistry;
-  beforeEach(() => { registry = new WorkerRegistry(); });
-  afterEach(() => { registry.destroy(); });
+  let app: FastifyInstance;
+  beforeEach(() => {
+    registry = new WorkerRegistry();
+    app = makeApp(registry);
+  });
+  afterEach(async () => {
+    await app.close();
+    registry.destroy();
+  });
 
   it("returns 401 without Authorization header", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({
       method: "POST", url: "/internal/workers/c1/events",
       headers: { "content-type": "application/json" },
@@ -71,7 +85,6 @@ describe("POST /internal/workers/:id/events", () => {
   });
 
   it("returns 404 for unknown worker", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({
       method: "POST", url: "/internal/workers/no-such/events",
       headers: { authorization: `Bearer ${INTERNAL_SECRET}`, "content-type": "application/json" },
@@ -82,7 +95,6 @@ describe("POST /internal/workers/:id/events", () => {
 
   it("appends event and returns seq for known worker", async () => {
     registry.register({ correlationId: "c1", mode: "implementation", issueUrl: "u", issue: "o/r#1", runner: "local-docker" });
-    const app = makeApp(registry);
     const res = await app.inject({
       method: "POST", url: "/internal/workers/c1/events",
       headers: { authorization: `Bearer ${INTERNAL_SECRET}`, "content-type": "application/json" },
@@ -96,17 +108,22 @@ describe("POST /internal/workers/:id/events", () => {
 
 describe("GET /api/workers/:id/stream", () => {
   let registry: WorkerRegistry;
-  beforeEach(() => { registry = new WorkerRegistry(); });
-  afterEach(() => { registry.destroy(); });
+  let app: FastifyInstance;
+  beforeEach(() => {
+    registry = new WorkerRegistry();
+    app = makeApp(registry);
+  });
+  afterEach(async () => {
+    await app.close();
+    registry.destroy();
+  });
 
   it("returns 401 without auth", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({ method: "GET", url: "/api/workers/c1/stream" });
     expect(res.statusCode).toBe(401);
   });
 
   it("returns 404 for unknown worker", async () => {
-    const app = makeApp(registry);
     const res = await app.inject({
       method: "GET", url: "/api/workers/no-such/stream",
       headers: { authorization: `Bearer ${API_KEY}` }
@@ -119,7 +136,6 @@ describe("GET /api/workers/:id/stream", () => {
     registry.appendEvent("c1", { type: "lifecycle", ts: "t1", event: "harness.start", data: {} });
     registry.appendEvent("c1", { type: "lifecycle", ts: "t2", event: "worker.finished", data: { outcome: "success" } });
 
-    const app = makeApp(registry);
     const res = await app.inject({
       method: "GET", url: "/api/workers/c1/stream",
       headers: { authorization: `Bearer ${API_KEY}` }
@@ -129,6 +145,7 @@ describe("GET /api/workers/:id/stream", () => {
     expect(res.headers["content-type"]).toBe("text/event-stream");
     expect(res.payload).toContain('"event":"harness.start"');
     expect(res.payload).toContain('"event":"worker.finished"');
+    expect(res.payload).toContain('"type":"stream.closed"');
     expect(res.payload).toContain('"reason":"worker_finished"');
   });
 });
