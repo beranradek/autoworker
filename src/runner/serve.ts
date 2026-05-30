@@ -2,7 +2,9 @@ import { getConfig } from "../config.js";
 import { log } from "../log.js";
 import { createGitHubClient } from "../github/client.js";
 import { GitHubIssueService } from "../issues/github-service.js";
-import { startHealthServer } from "../health/server.js";
+import { startApiServer } from "../api-gateway/server.js";
+import { internalWorkerSecret } from "../api-gateway/internal-secret.js";
+import { workerRegistry } from "../api-gateway/worker-registry.js";
 import {
   markWebhookError,
   markWebhookProcessed,
@@ -75,7 +77,11 @@ export async function serve(): Promise<void> {
   const lock = new Mutex();
 
   setWebhookEnabled(true);
-  startHealthServer({ webhook: { secret: cfg.GITHUB_WEBHOOK_SECRET, queue, repos } });
+  await startApiServer({
+    webhookDeps: { secret: cfg.GITHUB_WEBHOOK_SECRET, queue, repos },
+    registry: workerRegistry,
+    internalSecret: internalWorkerSecret
+  });
   log("info", "serve.start", {
     repos: repos.map((r) => `${r.provider}:${r.owner}/${r.repo}`),
     webhookPath: "/webhook",
