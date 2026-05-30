@@ -23,7 +23,8 @@ Provisions all Azure infrastructure for Autoworker:
 | `subscription_id` | Azure subscription ID |
 | `resource_group_name` | Pre-existing resource group name |
 | `location` | Azure region (e.g. `germanywestcentral`) |
-| `github_repos` | Repos to handle, e.g. `myorg/myrepo` |
+| `repos` | Repos to handle as a JSON array, e.g. `[{"provider":"github","slug":"myorg/myrepo"}]`. Per-repo `steps` (subset of `impl`, `review`, `merge`) default to `["impl","review"]` when omitted. |
+| `github_repos` | **Deprecated.** Comma/whitespace-separated `owner/repo` list. Used when `repos` is unset; steps come from the global `STEP_*` env vars. Either `repos` or `github_repos` must be set. |
 
 All other variables have sensible defaults (see `variables.tf`).
 
@@ -57,7 +58,7 @@ terraform init
 export TF_VAR_subscription_id="<subscription-id>"
 export TF_VAR_resource_group_name="autoworker-rg"
 export TF_VAR_location="germanywestcentral"
-export TF_VAR_github_repos="myorg/myrepo"
+export TF_VAR_repos='[{"provider":"github","slug":"myorg/myrepo"}]'
 
 # Select correct Azure subscription:
 az account set --subscription <subscription-id>

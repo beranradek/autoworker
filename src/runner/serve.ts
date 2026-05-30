@@ -40,7 +40,7 @@ async function consumeWebhooks(
     log("info", "webhook.process_start", { repo: job.repoKey, reason: job.reason });
     try {
       const service = new GitHubIssueService(octokit, job.repo, cfg);
-      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey));
+      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, job.steps));
       markWebhookProcessed(job.repoKey, queue.depth);
       log("info", "webhook.process_done", { repo: job.repoKey });
     } catch (err) {
@@ -77,7 +77,7 @@ export async function serve(): Promise<void> {
   setWebhookEnabled(true);
   startHealthServer({ webhook: { secret: cfg.GITHUB_WEBHOOK_SECRET, queue, repos } });
   log("info", "serve.start", {
-    repos: repos.map((r) => `${r.owner}/${r.repo}`),
+    repos: repos.map((r) => `${r.provider}:${r.owner}/${r.repo}`),
     webhookPath: "/webhook",
     safetyPollIntervalSeconds: cfg.POLL_INTERVAL_SECONDS
   });

@@ -30,11 +30,13 @@ Two separate runtime boundaries:
 
 ### Orchestrator data flow
 
-`runOrchestration` (`src/runner/orchestrate.ts`) drives a three-step label-based state machine per repo:
+`runOrchestration` (`src/runner/orchestrate.ts`) drives a three-step label-based state machine per repo. Each step is gated by a per-repo `RepoSteps` flag (`impl`/`review`/`merge`) parsed from the `REPOS` env var by `src/repos.ts`:
 
-1. **STEP_IMPLEMENTATION** — finds open issues mentioning `WORKER_MENTION`, labels them `in-progress`, spawns a worker via `JobRunner.runIssue()`.
-2. **STEP_PR_REVIEW** — finds `pr-created` issues, labels them `in-review`, spawns a worker via `JobRunner.runPrReview()`.
-3. **STEP_PR_MERGE** — finds `pr-reviewed` issues (excluding `human-needed`) and auto-merges the linked PR.
+1. **impl** — finds open issues mentioning `WORKER_MENTION`, labels them `in-progress`, spawns a worker via `JobRunner.runIssue()`.
+2. **review** — finds `pr-created` issues, labels them `in-review`, spawns a worker via `JobRunner.runPrReview()`.
+3. **merge** — finds `pr-reviewed` issues (excluding `human-needed`) and auto-merges the linked PR.
+
+Per-repo configuration lives in `src/repos.ts` (`RepoConfig`, `parseRepos`). `REPOS` is the new JSON-array env var; `GITHUB_REPOS` + global `STEP_*` env vars are a deprecated fallback. `provider` carries `"github" | "gitlab"` so repos can be tagged for a future GitLab service.
 
 Issue state is entirely driven by GitHub labels. The `IssueState` type (`src/issues/model.ts`) maps to label sets resolved in `GitHubIssueService` (`src/issues/github-service.ts`).
 

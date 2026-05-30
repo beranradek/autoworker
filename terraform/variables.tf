@@ -25,9 +25,26 @@ variable "acr_name" {
   description = "Azure Container Registry name (alphanumeric only, globally unique)."
 }
 
+variable "repos" {
+  type        = string
+  default     = null
+  description = <<-EOT
+    Preferred: JSON array of repo configs with per-repo step flags. Example:
+      [{"provider":"github","slug":"myorg/myrepo","steps":["impl","review","merge"]}]
+    `steps` is optional and defaults to ["impl","review"] (merge must be opted in).
+    When set, takes precedence over `github_repos`.
+  EOT
+}
+
 variable "github_repos" {
   type        = string
-  description = "Comma/whitespace-separated list of owner/repo entries to poll (e.g. myorg/myrepo)."
+  default     = null
+  description = "Deprecated: comma/whitespace-separated list of owner/repo entries. Used only when `repos` is unset; steps come from the global STEP_* env vars."
+
+  validation {
+    condition     = var.github_repos != null || var.repos != null
+    error_message = "Either `repos` (preferred, JSON) or `github_repos` (deprecated) must be set."
+  }
 }
 
 variable "worker_job_name_prefix" {

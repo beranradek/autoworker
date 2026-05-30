@@ -10,7 +10,7 @@ From the `terraform/` directory, set the minimum variables and apply:
 export TF_VAR_subscription_id="<your-subscription-id>"
 export TF_VAR_resource_group_name="autoworker-rg"
 export TF_VAR_location="germanywestcentral"
-export TF_VAR_github_repos="myorg/myrepo"
+export TF_VAR_repos='[{"provider":"github","slug":"myorg/myrepo"}]'
 terraform apply
 ```
 
@@ -70,7 +70,7 @@ curl -s https://<orchestrator-fqdn>/healthz | jq .status
 Update an env var:
 
 ```bash
-az containerapp update --name autoworker-orchestrator --resource-group autoworker-rg --set-env-vars "GITHUB_REPOS=myorg/myrepo"
+az containerapp update --name autoworker-orchestrator --resource-group autoworker-rg --set-env-vars 'REPOS=[{"provider":"github","slug":"myorg/myrepo"}]'
 ```
 
 ### Worker jobs
