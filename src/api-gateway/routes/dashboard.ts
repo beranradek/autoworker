@@ -4,55 +4,30 @@ import type { WorkerRegistry, WorkerEvent } from "../worker-registry.js";
 
 type DashboardPluginOpts = { registry: WorkerRegistry; apiKey: string };
 
-const COOKIE_NAME = "aw_dashboard";
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 12; // 12h
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const part of header.split(";")) {
-    const idx = part.indexOf("=");
-    if (idx < 0) continue;
-    const key = part.slice(0, idx).trim();
-    const value = part.slice(idx + 1).trim();
-    if (!key) continue;
-    try {
-      out[key] = decodeURIComponent(value);
-    } catch {
-      out[key] = value;
-    }
-  }
-  return out;
-}
-
-function isHttps(req: FastifyRequest): boolean {
-  const xfProto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "";
-  if (xfProto.toLowerCase() === "https") return true;
-  const xfSsl = (req.headers["x-forwarded-ssl"] as string | undefined) ?? "";
-  if (xfSsl.toLowerCase() === "on") return true;
-  return false;
-}
-
-function setCookie(reply: FastifyReply, name: string, value: string, opts: { secure: boolean; path: string }): void {
-  const enc = encodeURIComponent(value);
-  const parts = [
-    `${name}=${enc}`,
-    `Path=${opts.path}`,
-    `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
-    "HttpOnly",
-    "SameSite=Strict",
-  ];
-  if (opts.secure) parts.push("Secure");
-  reply.header("Set-Cookie", parts.join("; "));
-}
-
-function requireDashboardCookie(expectedApiKey: string) {
+function requireDashboardBasicAuth(expectedApiKey: string) {
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const cookies = parseCookies(req.headers.cookie as string | undefined);
-    const token = cookies[COOKIE_NAME] ?? "";
-    if (!safeCompare(token, expectedApiKey)) {
-      return reply.code(401).send({ ok: false, error: "unauthorized" }) as unknown as void;
+    const auth = (req.headers.authorization as string | undefined) ?? "";
+    const challenge = () =>
+      reply
+        .header("WWW-Authenticate", 'Basic realm="autoworker dashboard", charset="UTF-8"')
+        .code(401)
+        .send({ ok: false, error: "unauthorized" }) as unknown as void;
+
+    if (!auth.startsWith("Basic ")) return challenge();
+
+    let decoded = "";
+    try {
+      decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
+    } catch {
+      return challenge();
     }
+    const idx = decoded.indexOf(":");
+    if (idx < 0) return challenge();
+    const username = decoded.slice(0, idx);
+    const password = decoded.slice(idx + 1);
+
+    if (username !== "admin") return challenge();
+    if (!safeCompare(password, expectedApiKey)) return challenge();
   };
 }
 
@@ -286,7 +261,7 @@ function render(){
 async function fetchWorkers(){
   const res = await fetch("/dashboard/api/workers", { credentials: "same-origin" });
   if (res.status === 401){
-    $("#authHint").textContent = "Unauthorized. Open /dashboard/workers with Authorization: Bearer <API_KEY> to set a session cookie.";
+    $("#authHint").textContent = "Unauthorized. This dashboard requires Basic Auth (username: admin, password: API_KEY).";
     return;
   }
   if (!res.ok){
@@ -373,49 +348,30 @@ function buildHtml(): string {
 
 export const dashboardRoutes: FastifyPluginAsync<DashboardPluginOpts> = async (fastify, opts) => {
   const { registry, apiKey } = opts;
+  const basicAuth = requireDashboardBasicAuth(apiKey);
 
   fastify.get(
     "/dashboard/workers",
-    async (
-      req: FastifyRequest<{ Querystring: { api_key?: string } }>,
-      reply: FastifyReply
-    ) => {
-      const bearer = ((req.headers.authorization as string | undefined) ?? "").startsWith("Bearer ")
-        ? ((req.headers.authorization as string).slice(7) ?? "")
-        : "";
-      const cookies = parseCookies(req.headers.cookie as string | undefined);
-      const cookieToken = cookies[COOKIE_NAME] ?? "";
-      const queryToken = req.query.api_key ?? "";
-
-      const ok = safeCompare(bearer, apiKey) || safeCompare(cookieToken, apiKey) || safeCompare(queryToken, apiKey);
-      if (!ok) {
-        return reply.code(401).send({ ok: false, error: "unauthorized" });
-      }
-
-      setCookie(reply, COOKIE_NAME, apiKey, { secure: isHttps(req), path: "/dashboard" });
-
-      // If authenticated via query param, redirect to a clean URL to reduce
-      // accidental sharing of the secret in copy/pastes.
-      if (queryToken) return reply.redirect(302, "/dashboard/workers");
-
+    { preHandler: basicAuth },
+    async (_req: FastifyRequest, reply: FastifyReply) => {
       return reply.type("text/html; charset=utf-8").send(buildHtml());
     }
   );
 
-  fastify.get("/dashboard", async (_req, reply) => reply.redirect(302, "/dashboard/workers"));
+  fastify.get("/dashboard", { preHandler: basicAuth }, async (_req, reply) => reply.redirect(302, "/dashboard/workers"));
 
-  fastify.get("/dashboard/workers.css", async (_req, reply) => reply.type("text/css; charset=utf-8").send(CSS));
-  fastify.get("/dashboard/workers.js", async (_req, reply) => reply.type("application/javascript; charset=utf-8").send(JS));
+  fastify.get("/dashboard/workers.css", { preHandler: basicAuth }, async (_req, reply) => reply.type("text/css; charset=utf-8").send(CSS));
+  fastify.get("/dashboard/workers.js", { preHandler: basicAuth }, async (_req, reply) => reply.type("application/javascript; charset=utf-8").send(JS));
 
   fastify.get(
     "/dashboard/api/workers",
-    { preHandler: requireDashboardCookie(apiKey) },
+    { preHandler: basicAuth },
     async (_req, reply) => reply.send({ workers: registry.list() })
   );
 
   fastify.get<{ Params: { id: string } }>(
     "/dashboard/api/workers/:id/stream",
-    { preHandler: requireDashboardCookie(apiKey) },
+    { preHandler: basicAuth },
     async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const record = registry.get(req.params.id);
       if (!record) {

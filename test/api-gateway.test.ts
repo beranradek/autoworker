@@ -165,24 +165,22 @@ describe("Dashboard workers UI (/dashboard/workers)", () => {
   it("returns 401 without Authorization header", async () => {
     const res = await app.inject({ method: "GET", url: "/dashboard/workers" });
     expect(res.statusCode).toBe(401);
+    expect(res.headers["www-authenticate"]).toContain("Basic");
   });
 
-  it("sets a session cookie and serves HTML with correct bearer token", async () => {
-    const res = await app.inject({ method: "GET", url: "/dashboard/workers", headers: { authorization: `Bearer ${API_KEY}` } });
+  it("serves HTML with correct Basic auth", async () => {
+    const basic = `Basic ${Buffer.from(`admin:${API_KEY}`).toString("base64")}`;
+    const res = await app.inject({ method: "GET", url: "/dashboard/workers", headers: { authorization: basic } });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
-    expect(res.headers["set-cookie"]).toContain("aw_dashboard=");
     expect(res.payload).toContain("Workers");
     expect(res.payload).toContain("/dashboard/workers.js");
   });
 
-  it("allows /dashboard/api/workers with the session cookie", async () => {
+  it("allows /dashboard/api/workers with correct Basic auth", async () => {
     registry.register({ correlationId: "c1", mode: "implementation", issueUrl: "u", issue: "o/r#1", runner: "local-docker" });
-    const page = await app.inject({ method: "GET", url: "/dashboard/workers", headers: { authorization: `Bearer ${API_KEY}` } });
-    const setCookie = page.headers["set-cookie"];
-    expect(setCookie).toBeTruthy();
-
-    const res = await app.inject({ method: "GET", url: "/dashboard/api/workers", headers: { cookie: String(setCookie).split(";")[0] } });
+    const basic = `Basic ${Buffer.from(`admin:${API_KEY}`).toString("base64")}`;
+    const res = await app.inject({ method: "GET", url: "/dashboard/api/workers", headers: { authorization: basic } });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toMatchObject({ workers: [{ correlationId: "c1" }] });
   });
