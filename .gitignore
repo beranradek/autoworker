@@ -14,3 +14,5 @@ terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/plan.out
 terraform/*.tfvars
+
+bruno/*/environments/

@@ -28,6 +28,7 @@ Required secrets:
 |--------|-----------|
 | `github-token` | always |
 | `github-webhook-secret` | always (serve mode) |
+| `api-key` | always — Bearer token for GET /api/workers and SSE stream |
 | `openai-api-key` | `llm_model = "openai/..."` |
 | `anthropic-api-key` | `llm_model = "anthropic/..."` |
 | `azure-api-key` | `llm_model = "azure/<deployment>"` |

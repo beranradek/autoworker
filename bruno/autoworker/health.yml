@@ -1,0 +1,14 @@
+info:
+  name: health
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{BASE_URL}}/healthz"
+
+settings:
+  encodeUrl: true
+  timeout: 10000
+  followRedirects: true
+  maxRedirects: 5
