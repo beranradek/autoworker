@@ -32,6 +32,7 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
     OPENCODE_AUTH_JSON, LLM_MODEL, ownerRepo, issueNum, issueUrl, issueText
   } = cfg;
   emitEvent("harness.start", { ownerRepo: ownerRepo || null, issueNum: issueNum || null, llmModel: LLM_MODEL });
+  let _workerError = null;
   try {
 
   if (ownerRepo) {
@@ -436,8 +437,11 @@ export async function runImplementation(ghEnv, CLONE_DIR, ARTIFACTS_DIR, WORKDIR
   log("info", "harness.done", { prUrl, branchName });
 
   } catch (err) {
-    await emitEventAndWait("worker.finished", { outcome: "failed", error: String(err?.message || err) });
-    throw err;
+    _workerError = err;
+  } finally {
+    await emitEventAndWait("worker.finished", _workerError
+      ? { outcome: "failed", error: String(_workerError?.message || _workerError) }
+      : { outcome: "success" });
+    if (_workerError) throw _workerError;
   }
-  await emitEventAndWait("worker.finished", { outcome: "success" });
 }

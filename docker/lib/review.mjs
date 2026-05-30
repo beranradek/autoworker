@@ -16,6 +16,7 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   const OPENCODE_AUTH_JSON = process.env.OPENCODE_AUTH_JSON || "";
   const LLM_MODEL = process.env.LLM_MODEL || "openai/gpt-5-mini";
 
+  let _workerError = null;
   try {
 
   emitEvent("review.start", { prUrl, branch: prBranch });
@@ -238,8 +239,11 @@ export async function runPrReview(ghEnv, CLONE_DIR, ARTIFACTS_DIR) {
   log("info", "harness.pr_review.done", { prNum, outcome, pushedChanges });
 
   } catch (err) {
-    await emitEventAndWait("worker.finished", { outcome: "failed", error: String(err?.message || err) });
-    throw err;
+    _workerError = err;
+  } finally {
+    await emitEventAndWait("worker.finished", _workerError
+      ? { outcome: "failed", error: String(_workerError?.message || _workerError) }
+      : { outcome: "success" });
+    if (_workerError) throw _workerError;
   }
-  await emitEventAndWait("worker.finished", { outcome: "success" });
 }

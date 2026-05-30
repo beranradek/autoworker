@@ -85,4 +85,4 @@ async function main() {
   });
 }
 
-main().catch((e) => { die("Unhandled error", { error: String(e?.stack || e) }); });
+main().catch((e) => { log("error", "fatal", { message: "Unhandled error", error: String(e?.stack || e) }); process.exit(2); });

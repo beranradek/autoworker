@@ -17,7 +17,7 @@ export function log(level, msg, extra) {
 
 export function die(message, extra) {
   log("error", "fatal", { message, ...(extra ?? {}) });
-  process.exit(2);
+  throw new Error(message);
 }
 
 export function redact(str) {
