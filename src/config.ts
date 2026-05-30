@@ -26,7 +26,7 @@ const schema = z.object({
   // Required by `serve` mode, which exposes the POST /webhook endpoint.
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
   API_KEY: z.string().optional(),
-  ORCHESTRATOR_INTERNAL_URL: z.string().optional(),
+  ORCHESTRATOR_INTERNAL_URL: z.string().url().optional(),
 
   // Work-hours window for the safety-net poll only (NOT webhooks). Outside this
   // window the periodic poll pauses to spare cost; webhook-triggered processing

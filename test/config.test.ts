@@ -344,4 +344,18 @@ describe("getConfig", () => {
       }
     );
   });
+
+  it("API_KEY defaults to undefined when not set", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        GITHUB_REPOS: "o/r",
+        DRY_RUN: "true"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.API_KEY).toBeUndefined();
+      }
+    );
+  });
 });
