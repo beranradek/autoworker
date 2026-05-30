@@ -362,7 +362,7 @@ export const dashboardRoutes: FastifyPluginAsync<DashboardPluginOpts> = async (f
     }
   );
 
-  fastify.get("/dashboard", { preHandler: basicAuth }, async (_req, reply) => reply.redirect(302, "/dashboard/workers"));
+  fastify.get("/dashboard", { preHandler: basicAuth }, async (_req, reply) => reply.redirect("/dashboard/workers", 302));
 
   fastify.get("/dashboard/workers.css", { preHandler: basicAuth }, async (_req, reply) => reply.type("text/css; charset=utf-8").send(CSS));
   fastify.get("/dashboard/workers.js", { preHandler: basicAuth }, async (_req, reply) => reply.type("application/javascript; charset=utf-8").send(JS));
