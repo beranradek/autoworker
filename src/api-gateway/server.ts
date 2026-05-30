@@ -6,6 +6,7 @@ import { healthRoutes } from "./routes/health.js";
 import { webhookRoutes, type WebhookDeps } from "./routes/webhook.js";
 import { workersRoutes } from "./routes/workers.js";
 import { internalRoutes } from "./routes/internal.js";
+import { dashboardRoutes } from "./routes/dashboard.js";
 import type { WorkerRegistry } from "./worker-registry.js";
 
 export type { WebhookDeps };
@@ -28,6 +29,7 @@ export function buildApp(deps: BuildAppDeps): FastifyInstance {
 
   fastify.register(workersRoutes, { prefix: "/api", registry: deps.registry, apiKey: deps.apiKey });
   fastify.register(internalRoutes, { prefix: "/internal", registry: deps.registry, internalSecret: deps.internalSecret });
+  fastify.register(dashboardRoutes, { registry: deps.registry, apiKey: deps.apiKey });
 
   return fastify;
 }
