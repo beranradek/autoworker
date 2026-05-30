@@ -5,7 +5,7 @@ import { getStatus, markWebhookEnqueued, markWebhookError, markWebhookReceived }
 import { parseWebhookEvent } from "../webhook/events.js";
 import { verifySignature } from "../webhook/verify.js";
 import type { FifoQueue } from "../webhook/queue.js";
-import type { RepoRef } from "../github/types.js";
+import type { RepoConfig } from "../repos.js";
 
 const WEBHOOK_PATH = "/webhook";
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // GitHub caps payloads at ~25MB; we only need small JSON.
@@ -13,7 +13,7 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024; // GitHub caps payloads at ~25MB; we onl
 export type WebhookDeps = {
   secret: string | undefined;
   queue: FifoQueue;
-  repos: RepoRef[];
+  repos: RepoConfig[];
 };
 
 function json(res: http.ServerResponse, statusCode: number, body: unknown) {
@@ -99,8 +99,11 @@ async function handleWebhook(req: http.IncomingMessage, res: http.ServerResponse
     return;
   }
 
-  // Only act on repositories this orchestrator is configured for.
-  const repo = deps.repos.find((r) => `${r.owner}/${r.repo}`.toLowerCase() === parsed.repoFullName.toLowerCase());
+  // Only act on repositories this orchestrator is configured for. GitHub
+  // webhooks only carry github repos, so restrict the match accordingly.
+  const repo = deps.repos.find(
+    (r) => r.provider === "github" && `${r.owner}/${r.repo}`.toLowerCase() === parsed.repoFullName.toLowerCase()
+  );
   if (!repo) {
     json(res, 202, { ok: true, queued: false, reason: "repo_not_configured" });
     log("warn", "webhook.repo_not_configured", { repo: parsed.repoFullName, event: parsed.summary });
@@ -109,8 +112,9 @@ async function handleWebhook(req: http.IncomingMessage, res: http.ServerResponse
 
   const repoKey = `${repo.owner}/${repo.repo}`;
   const queued = deps.queue.enqueue({
-    repo,
+    repo: { owner: repo.owner, repo: repo.repo },
     repoKey,
+    steps: repo.steps,
     reason: parsed.summary,
     enqueuedAt: new Date().toISOString()
   });

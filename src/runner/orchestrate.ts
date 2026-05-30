@@ -1,17 +1,19 @@
 import type { Config } from "../config.js";
 import type { IssueService } from "../issues/service.js";
 import type { JobRunner } from "../job-runner/types.js";
+import type { RepoSteps } from "../repos.js";
 import { log } from "../log.js";
 
 export async function runOrchestration(
   service: IssueService,
   runner: JobRunner,
   cfg: Config,
-  repoKey: string
+  repoKey: string,
+  steps: RepoSteps
 ): Promise<void> {
   await service.ensureLabels();
 
-  if (cfg.STEP_PR_MERGE) {
+  if (steps.merge) {
     const issues = await service.listIssuesByState("pr_reviewed");
     for (const issue of issues) {
       if (issue.prReviewOutcome === "human_needed") continue;
@@ -30,7 +32,7 @@ export async function runOrchestration(
     }
   }
 
-  if (cfg.STEP_PR_REVIEW) {
+  if (steps.review) {
     const issues = await service.listIssuesByState("pr_created");
     for (const issue of issues) {
       try {
@@ -95,7 +97,7 @@ export async function runOrchestration(
     }
   }
 
-  if (cfg.STEP_IMPLEMENTATION) {
+  if (steps.impl) {
     const issues = await service.listIssuesByState("open");
     let accepted = 0;
     for (const issue of issues) {

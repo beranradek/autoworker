@@ -1,8 +1,10 @@
 import type { RepoRef } from "../github/types.js";
+import type { RepoSteps } from "../repos.js";
 
 export type WebhookJob = {
   repo: RepoRef;
   repoKey: string;
+  steps: RepoSteps;
   /** Human-readable description of the event that triggered this job (for logs). */
   reason: string;
   enqueuedAt: string;

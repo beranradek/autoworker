@@ -228,6 +228,31 @@ describe("getConfig", () => {
     );
   });
 
+  it("accepts REPOS instead of GITHUB_REPOS", () => {
+    withEnv(
+      {
+        GITHUB_TOKEN: "x",
+        REPOS: '[{"provider":"github","slug":"o/r"}]',
+        JOB_RUNNER: "local-docker",
+        DRY_RUN: "true"
+      },
+      () => {
+        const cfg = getConfig();
+        expect(cfg.REPOS).toBe('[{"provider":"github","slug":"o/r"}]');
+        expect(cfg.GITHUB_REPOS).toBeUndefined();
+      }
+    );
+  });
+
+  it("throws when neither REPOS nor GITHUB_REPOS is set", () => {
+    withEnv(
+      { GITHUB_TOKEN: "x", JOB_RUNNER: "local-docker", DRY_RUN: "true" },
+      () => {
+        expect(() => getConfig()).toThrow(/Missing repo configuration/);
+      }
+    );
+  });
+
   it("accepts configuration where PR_REVIEW_WORKER_IMAGE overrides WORKER_IMAGE when both are present", () => {
     withEnv(
       {

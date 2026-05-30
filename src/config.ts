@@ -3,8 +3,14 @@ import { z } from "zod";
 const schema = z.object({
   GH_TOKEN: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
-  // Comma/whitespace-separated list of "owner/repo" (can contain a single entry)
-  GITHUB_REPOS: z.string().min(1),
+  // New: JSON array of repo configs with per-repo step flags. Example:
+  //   [{"provider":"github","slug":"owner/repo","steps":["impl","review","merge"]}]
+  // Steps default to ["impl","review"] when omitted on an entry.
+  REPOS: z.string().optional(),
+  // Deprecated: comma/whitespace-separated list of "owner/repo". When set
+  // without REPOS, falls back to a github-only setup with steps derived from
+  // the global STEP_* env vars below.
+  GITHUB_REPOS: z.string().optional(),
 
   JOB_RUNNER: z.enum(["local-docker", "aca"]).default("local-docker"),
 
@@ -109,6 +115,9 @@ export function getConfig(): Config {
   }
   if (!parsed.data.GITHUB_TOKEN) {
     throw new Error("Missing GitHub auth: provide GITHUB_TOKEN (or GH_TOKEN)");
+  }
+  if (!parsed.data.REPOS?.trim() && !parsed.data.GITHUB_REPOS?.trim()) {
+    throw new Error("Missing repo configuration: provide REPOS (JSON) or GITHUB_REPOS (deprecated)");
   }
   if (parsed.data.JOB_RUNNER === "aca") {
     if (!parsed.data.AZURE_SUBSCRIPTION_ID || !parsed.data.AZURE_RESOURCE_GROUP || !parsed.data.AZURE_LOCATION || !parsed.data.ACA_ENV_NAME) {

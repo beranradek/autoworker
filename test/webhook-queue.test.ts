@@ -3,7 +3,13 @@ import { FifoQueue, type WebhookJob } from "../src/webhook/queue.js";
 
 function job(repoKey: string, reason = "issues.opened"): WebhookJob {
   const [owner, repo] = repoKey.split("/");
-  return { repo: { owner, repo }, repoKey, reason, enqueuedAt: new Date().toISOString() };
+  return {
+    repo: { owner, repo },
+    repoKey,
+    steps: { impl: true, review: true, merge: false },
+    reason,
+    enqueuedAt: new Date().toISOString()
+  };
 }
 
 describe("FifoQueue", () => {

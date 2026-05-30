@@ -111,9 +111,34 @@ Webhooks process 24/7. The safety-net poll runs every `POLL_INTERVAL_SECONDS` (d
 
 Minimum (local):
 
-- `GITHUB_REPOS` (comma/whitespace-separated `owner/repo` list; can contain a single entry)
+- `REPOS` — JSON array of repos with per-repo step flags (see "Repo configuration" below)
 - `GITHUB_TOKEN` (or `GH_TOKEN`)
 - `DRY_RUN` (`true` = claim-only, `false` = also runs the worker)
+
+### Repo configuration
+
+`REPOS` is a JSON array. Each entry has:
+
+- `provider`: `"github"` (only one wired up today) or `"gitlab"` (parsed but skipped at runtime until a GitLab service is implemented).
+- `slug`: `"owner/repo"`.
+- `steps` (optional): subset of `["impl","review","merge"]`. Defaults to `["impl","review"]` when omitted — `merge` (auto-merge of approved PRs) must be opted in per repo.
+
+Example — enable auto-merge only for one repo:
+
+```json
+[
+  {"provider":"github","slug":"etnetera/waulter"},
+  {"provider":"github","slug":"beranradek/sum","steps":["impl","review","merge"]}
+]
+```
+
+Single repo, defaults:
+
+```json
+[{"provider":"github","slug":"owner/repo"}]
+```
+
+**Deprecated fallback (still works):** if `REPOS` is unset but `GITHUB_REPOS` is set (comma/whitespace-separated `owner/repo` list), repos are assumed to be GitHub and the global `STEP_IMPLEMENTATION` / `STEP_PR_REVIEW` / `STEP_PR_MERGE` env vars determine which steps run for every repo. A deprecation warning is logged on each cycle.
 
 When `DRY_RUN=false`:
 

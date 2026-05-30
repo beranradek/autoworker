@@ -3,24 +3,14 @@ import type { Config } from "../config.js";
 import { log } from "../log.js";
 import { createGitHubClient } from "../github/client.js";
 import { GitHubIssueService } from "../issues/github-service.js";
-import type { RepoRef } from "../github/types.js";
 import { AcaJobRunner } from "../job-runner/aca.js";
 import { LocalDockerJobRunner } from "../job-runner/local-docker.js";
 import type { JobRunner } from "../job-runner/types.js";
 import { validateOpencodeAuthJson } from "../opencode-auth.js";
+import { parseRepos } from "../repos.js";
 import { runOrchestration } from "./orchestrate.js";
 
-/** Parse GITHUB_REPOS ("owner/repo" entries, comma/whitespace separated). */
-export function parseRepos(cfg: Config): RepoRef[] {
-  return cfg.GITHUB_REPOS.split(/[\s,]+/g)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((full) => {
-      const [owner, repo] = full.split("/", 2);
-      if (!owner || !repo) throw new Error(`Invalid GITHUB_REPOS entry (expected owner/repo): ${full}`);
-      return { owner, repo };
-    });
-}
+export { parseRepos };
 
 /** Construct the configured job runner (local Docker or Azure Container Apps). */
 export function buildRunner(cfg: Config): JobRunner {
@@ -73,7 +63,10 @@ export async function runOnce(): Promise<void> {
 
   const repos = parseRepos(cfg);
 
-  log("info", "poll.start", { repos: repos.map((r) => `${r.owner}/${r.repo}`), dryRun: cfg.DRY_RUN });
+  log("info", "poll.start", {
+    repos: repos.map((r) => `${r.provider}:${r.owner}/${r.repo}`),
+    dryRun: cfg.DRY_RUN
+  });
 
   validateAuthIfNeeded(cfg);
 
@@ -81,10 +74,14 @@ export async function runOnce(): Promise<void> {
 
   for (const repo of repos) {
     const repoKey = `${repo.owner}/${repo.repo}`;
-    log("info", "poll.repo_start", { repo: repoKey });
+    if (repo.provider !== "github") {
+      log("warn", "poll.provider_not_supported", { repo: repoKey, provider: repo.provider });
+      continue;
+    }
+    log("info", "poll.repo_start", { repo: repoKey, steps: repo.steps });
     try {
-      const service = new GitHubIssueService(octokit, repo, cfg);
-      await runOrchestration(service, runner, cfg, repoKey);
+      const service = new GitHubIssueService(octokit, { owner: repo.owner, repo: repo.repo }, cfg);
+      await runOrchestration(service, runner, cfg, repoKey, repo.steps);
     } catch (err) {
       log("error", "poll.repo_error", { repo: repoKey, error: String(err) });
     }
