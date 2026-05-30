@@ -121,7 +121,9 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `BASE_BRANCH=${input.baseBranch}`,
       "-e",
-      `ISSUE_URL=${input.issueUrl}`
+      `ISSUE_URL=${input.issueUrl}`,
+      "-e",
+      `CORRELATION_ID=${input.correlationId}`
     );
     if (this.opts.orchestratorInternalUrl) args.push("-e", `ORCHESTRATOR_INTERNAL_URL=${this.opts.orchestratorInternalUrl}`);
     if (this.opts.internalWorkerSecret) args.push("-e", `INTERNAL_WORKER_SECRET=${this.opts.internalWorkerSecret}`);

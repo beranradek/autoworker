@@ -448,6 +448,24 @@ describe("LocalDockerJobRunner", () => {
     expect(joined).not.toContain("INTERNAL_WORKER_SECRET");
   });
 
+  it("runPrReview injects CORRELATION_ID so the worker can push events to the orchestrator", async () => {
+    const { calls, spawnStub } = makeSpawnStub();
+    const runner = new LocalDockerJobRunner(spawnStub);
+
+    await runner.runPrReview({
+      issueUrl: "https://github.com/o/r/issues/1",
+      prUrl: "https://github.com/o/r/pull/42",
+      prBranch: "feat",
+      baseBranch: "main",
+      githubToken: "gh",
+      workerImage: "img:tag",
+      correlationId: "pr-c1"
+    });
+
+    const joined = calls[0].args.join(" ");
+    expect(joined).toContain("CORRELATION_ID=pr-c1");
+  });
+
   it("runPrReview injects ORCHESTRATOR_INTERNAL_URL and INTERNAL_WORKER_SECRET when provided", async () => {
     const { calls, spawnStub } = makeSpawnStub();
     const runner = new LocalDockerJobRunner(spawnStub, {

@@ -118,6 +118,7 @@ export class AcaJobRunner implements JobRunner {
         PR_BRANCH: input.prBranch,
         BASE_BRANCH: input.baseBranch,
         ISSUE_URL: input.issueUrl,
+        CORRELATION_ID: input.correlationId,
         ...(input.labelInReview ? { ISSUE_LABEL_IN_REVIEW: input.labelInReview } : {}),
         ...(input.labelPrReviewed ? { ISSUE_LABEL_PR_REVIEWED: input.labelPrReviewed } : {}),
         ...(input.labelHumanNeeded ? { ISSUE_LABEL_HUMAN_NEEDED: input.labelHumanNeeded } : {}),
