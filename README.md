@@ -127,8 +127,8 @@ Example — enable auto-merge only for one repo:
 
 ```json
 [
-  {"provider":"github","slug":"etnetera/waulter"},
-  {"provider":"github","slug":"beranradek/sum","steps":["impl","review","merge"]}
+  {"provider":"github","slug":"username/reponame"},
+  {"provider":"github","slug":"username2/reponame2","steps":["impl","review","merge"]}
 ]
 ```
 
