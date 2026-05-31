@@ -17,6 +17,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     LABEL_PR_REVIEWED: "pr-reviewed",
     LABEL_HUMAN_NEEDED: "human-needed",
     LABEL_IN_REVIEW: "in-review",
+    LABEL_UNSATISFIED_DEPENDENCIES: "unsatisfied-dependencies",
     POLL_INTERVAL_SECONDS: 60,
     MAX_ACCEPT_PER_RUN: 5,
     DRY_RUN: false,
@@ -54,6 +55,7 @@ function makeService(overrides: Partial<IssueService> = {}): IssueService {
   return {
     ensureLabels: vi.fn().mockResolvedValue(undefined),
     listIssuesByState: vi.fn().mockResolvedValue([]),
+    listPendingIssues: vi.fn().mockResolvedValue([]),
     transitionTo: vi.fn().mockResolvedValue(undefined),
     findLinkedPr: vi.fn().mockResolvedValue(null),
     mergePr: vi.fn().mockResolvedValue(undefined),
@@ -62,6 +64,8 @@ function makeService(overrides: Partial<IssueService> = {}): IssueService {
     markInReview: vi.fn().mockResolvedValue(undefined),
     unmarkInReview: vi.fn().mockResolvedValue(undefined),
     unmarkInProgress: vi.fn().mockResolvedValue(undefined),
+    markUnsatisfiedDependencies: vi.fn().mockResolvedValue(undefined),
+    unmarkUnsatisfiedDependencies: vi.fn().mockResolvedValue(undefined),
     ...overrides
   } as IssueService;
 }
@@ -77,11 +81,12 @@ function makeRunner(overrides: Partial<JobRunner> = {}): JobRunner {
 describe("runOrchestration – impl step", () => {
   it("calls listIssuesByState('open') when steps.impl=true", async () => {
     const service = makeService({
-      isMentionedByWorker: vi.fn().mockResolvedValue(true),
+      listPendingIssues: vi.fn().mockResolvedValue([{ number: 1, url: "u", title: "t", blockedBy: [], ready: true, blocksCount: 0 }]),
       listIssuesByState: vi.fn().mockResolvedValue([makeIssue()])
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
+    expect(service.listPendingIssues).toHaveBeenCalled();
     expect(service.listIssuesByState).toHaveBeenCalledWith("open");
   });
 
@@ -96,7 +101,7 @@ describe("runOrchestration – impl step", () => {
     const issue = makeIssue();
     const service = makeService({
       listIssuesByState: vi.fn().mockResolvedValue([issue]),
-      isMentionedByWorker: vi.fn().mockResolvedValue(true)
+      listPendingIssues: vi.fn().mockResolvedValue([{ number: issue.number, url: issue.url, title: issue.title, blockedBy: [], ready: true, blocksCount: 0 }])
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
@@ -105,11 +110,11 @@ describe("runOrchestration – impl step", () => {
     expect(runner.runIssue).toHaveBeenCalledWith(expect.objectContaining({ issueUrl: issue.url }));
   });
 
-  it("does NOT call transitionTo or runIssue when issue is not mentioned", async () => {
+  it("does NOT call transitionTo or runIssue when no pending mentioned issue exists", async () => {
     const issue = makeIssue();
     const service = makeService({
       listIssuesByState: vi.fn().mockResolvedValue([issue]),
-      isMentionedByWorker: vi.fn().mockResolvedValue(false)
+      listPendingIssues: vi.fn().mockResolvedValue([])
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
@@ -121,7 +126,7 @@ describe("runOrchestration – impl step", () => {
     const issue = makeIssue();
     const service = makeService({
       listIssuesByState: vi.fn().mockResolvedValue([issue]),
-      isMentionedByWorker: vi.fn().mockResolvedValue(true)
+      listPendingIssues: vi.fn().mockResolvedValue([{ number: issue.number, url: issue.url, title: issue.title, blockedBy: [], ready: true, blocksCount: 0 }])
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, makeConfig({ DRY_RUN: true }), "owner/repo", "tok", STEPS_IMPL_ONLY);
@@ -134,7 +139,7 @@ describe("runOrchestration – impl step", () => {
     const issue = makeIssue();
     const service = makeService({
       listIssuesByState: vi.fn().mockResolvedValue([issue]),
-      isMentionedByWorker: vi.fn().mockResolvedValue(true)
+      listPendingIssues: vi.fn().mockResolvedValue([{ number: issue.number, url: issue.url, title: issue.title, blockedBy: [], ready: true, blocksCount: 0 }])
     });
     service.transitionTo = vi.fn(async () => { callOrder.push("transitionTo"); });
     const runner = makeRunner();
@@ -148,7 +153,10 @@ describe("runOrchestration – impl step", () => {
     const issue2 = makeIssue({ number: 2 });
     const service = makeService({
       listIssuesByState: vi.fn().mockResolvedValue([issue1, issue2]),
-      isMentionedByWorker: vi.fn().mockResolvedValue(true)
+      listPendingIssues: vi.fn().mockResolvedValue([
+        { number: issue1.number, url: issue1.url, title: issue1.title, blockedBy: [], ready: true, blocksCount: 0 },
+        { number: issue2.number, url: issue2.url, title: issue2.title, blockedBy: [], ready: true, blocksCount: 0 },
+      ])
     });
     const runner = makeRunner();
     await runOrchestration(service, runner, makeConfig({ MAX_ACCEPT_PER_RUN: 1 }), "owner/repo", "tok", STEPS_IMPL_ONLY);

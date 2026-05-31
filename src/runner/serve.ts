@@ -47,7 +47,27 @@ async function consumeWebhooks(
       }
       const octokit = createGitHubClient(githubToken);
       const service = new GitHubIssueService(octokit, job.repo, cfg);
-      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, githubToken, job.steps, workerRegistry));
+      await lock.run(async () => {
+        await service.ensureLabels();
+
+        // If a webhook came in for an issue that can't yet be processed due to
+        // unsatisfied dependencies, mark it with an informational label.
+        if (job.steps.impl && job.number !== undefined && (job.eventType === "issues" || job.eventType === "issue_comment")) {
+          const pending = await service.listPendingIssues();
+          const info = pending.find((i) => i.number === job.number);
+          if (info && !info.ready) {
+            const openIssues = await service.listIssuesByState("open");
+            const issue = openIssues.find((i) => i.number === job.number);
+            if (issue) await service.markUnsatisfiedDependencies(issue);
+          } else if (info && info.ready) {
+            const openIssues = await service.listIssuesByState("open");
+            const issue = openIssues.find((i) => i.number === job.number);
+            if (issue) await service.unmarkUnsatisfiedDependencies(issue);
+          }
+        }
+
+        await runOrchestration(service, runner, cfg, job.repoKey, githubToken, job.steps, workerRegistry, { labelsEnsured: true });
+      });
       markWebhookProcessed(job.repoKey, queue.depth);
       log("info", "webhook.process_done", { repo: job.repoKey });
     } catch (err) {

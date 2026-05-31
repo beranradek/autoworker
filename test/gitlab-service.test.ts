@@ -22,6 +22,7 @@ function makeCfg(overrides: Partial<any> = {}) {
     LABEL_IN_REVIEW: "in-review",
     LABEL_PR_REVIEWED: "pr-reviewed",
     LABEL_HUMAN_NEEDED: "human-needed",
+    LABEL_UNSATISFIED_DEPENDENCIES: "unsatisfied-dependencies",
     PR_MERGE_METHOD: "squash",
     ...overrides
   };
@@ -43,8 +44,8 @@ describe("GitLabIssueService", () => {
   it("listPendingIssues treats open is_blocked_by links as blockers", async () => {
     const client = makeClient({
       "projects/o%2Fr/issues": [
-        { iid: 1, web_url: "u1", state: "opened", title: "a", description: "", labels: [] },
-        { iid: 2, web_url: "u2", state: "opened", title: "b", description: "", labels: [] },
+        { iid: 1, web_url: "u1", state: "opened", title: "a", description: "@worker", labels: [] },
+        { iid: 2, web_url: "u2", state: "opened", title: "b", description: "@worker", labels: [] },
       ],
       "projects/o%2Fr/issues/1/links": [],
       "projects/o%2Fr/issues/2/links": [
@@ -70,4 +71,3 @@ describe("GitLabIssueService", () => {
     expect(pr).toMatchObject({ number: 2, url: "mr2", branch: "b", baseBranch: "main" });
   });
 });
-

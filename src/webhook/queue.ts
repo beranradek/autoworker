@@ -7,6 +7,10 @@ export type WebhookJob = {
   steps: RepoSteps;
   /** Optional per-repo access token override (PAT). */
   repoToken?: string;
+  /** GitHub webhook event type (e.g. "issues", "pull_request"). */
+  eventType?: string;
+  /** Issue/PR number, when present in webhook payload. */
+  number?: number;
   /** Human-readable description of the event that triggered this job (for logs). */
   reason: string;
   enqueuedAt: string;

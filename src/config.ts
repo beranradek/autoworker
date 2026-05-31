@@ -21,6 +21,7 @@ const schema = z.object({
   WORKER_MENTION: z.string().default("@worker"),
   LABEL_IN_PROGRESS: z.string().default("in-progress"),
   LABEL_FAILED: z.string().default("worker-failed"),
+  LABEL_UNSATISFIED_DEPENDENCIES: z.string().default("unsatisfied-dependencies"),
 
   HEALTH_HOST: z.string().default("0.0.0.0"),
   HEALTH_PORT: z.coerce.number().int().positive().default(8080),

@@ -28,6 +28,7 @@ function makeConfig(overrides = {}): any {
     LABEL_PR_REVIEWED: "pr-reviewed",
     LABEL_HUMAN_NEEDED: "human-needed",
     LABEL_IN_REVIEW: "in-review",
+    LABEL_UNSATISFIED_DEPENDENCIES: "unsatisfied-dependencies",
     PR_MERGE_METHOD: "squash",
     ...overrides,
   };
@@ -270,9 +271,9 @@ describe("GitHubIssueService – listPendingIssues", () => {
         ...makeOctokit().issues,
         listForRepo: vi.fn().mockResolvedValue({
           data: [
-            makeApiIssue({ number: 1, labels: [] }),
-            makeApiIssue({ number: 2, labels: [] }),
-            makeApiIssue({ number: 3, labels: [] }),
+            makeApiIssue({ number: 1, labels: [], body: "@worker" }),
+            makeApiIssue({ number: 2, labels: [], body: "@worker" }),
+            makeApiIssue({ number: 3, labels: [], body: "@worker" }),
           ],
         }),
       },
@@ -299,7 +300,7 @@ describe("GitHubIssueService – listPendingIssues", () => {
         ...makeOctokit().issues,
         listForRepo: vi.fn().mockResolvedValue({
           data: [
-            makeApiIssue({ number: 10, labels: [] }),
+            makeApiIssue({ number: 10, labels: [], body: "@worker" }),
           ],
         }),
       },
@@ -317,8 +318,8 @@ describe("GitHubIssueService – listPendingIssues", () => {
         ...makeOctokit().issues,
         listForRepo: vi.fn().mockResolvedValue({
           data: [
-            makeApiIssue({ number: 1, labels: [] }),
-            makeApiIssue({ number: 2, labels: [] }),
+            makeApiIssue({ number: 1, labels: [], body: "@worker" }),
+            makeApiIssue({ number: 2, labels: [], body: "@worker" }),
           ],
         }),
       },

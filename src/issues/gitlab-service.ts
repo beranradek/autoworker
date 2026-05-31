@@ -69,6 +69,7 @@ const COLOR_PR_CREATED = "#0e8a16";
 const COLOR_IN_REVIEW = "#bfd4f2";
 const COLOR_PR_REVIEWED = "#c2e0c6";
 const COLOR_HUMAN_NEEDED = "#f9d0c4";
+const COLOR_UNSATISFIED_DEPS = "#d0d7de";
 
 export class GitLabIssueService implements IssueService {
   private dependencyApiUnavailableLogged = false;
@@ -87,6 +88,7 @@ export class GitLabIssueService implements IssueService {
       { name: this.cfg.LABEL_IN_REVIEW, color: COLOR_IN_REVIEW, description: "Worker is reviewing the MR" },
       { name: this.cfg.LABEL_PR_REVIEWED, color: COLOR_PR_REVIEWED, description: "Worker reviewed the MR" },
       { name: this.cfg.LABEL_HUMAN_NEEDED, color: COLOR_HUMAN_NEEDED, description: "Human review needed" },
+      { name: this.cfg.LABEL_UNSATISFIED_DEPENDENCIES, color: COLOR_UNSATISFIED_DEPS, description: "Blocked by unmet issue dependencies" },
       { name: "wontfix", color: "#ffffff", description: "This will not be worked on" },
       { name: "invalid", color: COLOR_IN_PROGRESS, description: "This doesn't seem right" },
       { name: "duplicate", color: "#cfd3d7", description: "This issue or MR already exists" },
@@ -132,11 +134,23 @@ export class GitLabIssueService implements IssueService {
   }
 
   async listPendingIssues(): Promise<PendingIssueInfo[]> {
-    const pending = await this.listIssuesByState("open");
+    const initial = await this.listIssuesByState("open");
+
+    const pending: Issue[] = [];
+    const CONCURRENCY = 8;
+    let idxMention = 0;
+    const mentionWorkers = Array.from({ length: Math.min(CONCURRENCY, initial.length) }, async () => {
+      while (true) {
+        const i = idxMention++;
+        if (i >= initial.length) return;
+        const issue = initial[i]!;
+        if (await this.isMentionedByWorker(issue)) pending.push(issue);
+      }
+    });
+    await Promise.all(mentionWorkers);
 
     const blockedByOpen = new Map<number, number[]>();
 
-    const CONCURRENCY = 8;
     let idx = 0;
     const workers = Array.from({ length: Math.min(CONCURRENCY, pending.length) }, async () => {
       while (true) {
@@ -182,6 +196,7 @@ export class GitLabIssueService implements IssueService {
     opts?: { closeReason?: CloseReason; prReviewOutcome?: PrReviewOutcome }
   ): Promise<void> {
     if (newState === "in_progress") {
+      await this.unmarkUnsatisfiedDependencies(issue);
       await this.addLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
       return;
     }
@@ -259,6 +274,14 @@ export class GitLabIssueService implements IssueService {
 
   async unmarkInProgress(issue: Issue): Promise<void> {
     await this.removeLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
+  }
+
+  async markUnsatisfiedDependencies(issue: Issue): Promise<void> {
+    await this.addLabel(issue.number, this.cfg.LABEL_UNSATISFIED_DEPENDENCIES);
+  }
+
+  async unmarkUnsatisfiedDependencies(issue: Issue): Promise<void> {
+    await this.removeLabel(issue.number, this.cfg.LABEL_UNSATISFIED_DEPENDENCIES);
   }
 
   private async addLabel(issueIid: number, label: string): Promise<void> {

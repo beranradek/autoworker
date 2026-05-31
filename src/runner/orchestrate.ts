@@ -12,9 +12,12 @@ export async function runOrchestration(
   repoKey: string,
   githubToken: string,
   steps: RepoSteps,
-  registry?: WorkerRegistry
+  registry?: WorkerRegistry,
+  opts?: { labelsEnsured?: boolean }
 ): Promise<void> {
-  await service.ensureLabels();
+  if (!opts?.labelsEnsured) {
+    await service.ensureLabels();
+  }
 
   if (steps.merge) {
     const issues = await service.listIssuesByState("pr_reviewed");
@@ -108,16 +111,20 @@ export async function runOrchestration(
   }
 
   if (steps.impl) {
+    const pendingInfos = await service.listPendingIssues();
+    if (pendingInfos.length === 0) return;
+
     const issues = await service.listIssuesByState("open");
+    const issuesByNumber = new Map<number, (typeof issues)[number]>();
+    for (const issue of issues) issuesByNumber.set(issue.number, issue);
+
     let accepted = 0;
-    for (const issue of issues) {
+    for (const info of pendingInfos) {
       if (accepted >= cfg.MAX_ACCEPT_PER_RUN) break;
+      if (!info.ready) continue;
+      const issue = issuesByNumber.get(info.number);
+      if (!issue) continue;
       try {
-        const mentioned = await service.isMentionedByWorker(issue);
-        if (!mentioned) {
-          log("debug", "orchestrate.impl.skip.no_mention", { repo: repoKey, issue: issue.number });
-          continue;
-        }
         const issueKey = `${repoKey}#${issue.number}`;
         const correlationId = `${repoKey.replace("/", "-")}-${issue.number}-${Date.now()}`;
         log("info", "orchestrate.impl.accept", { repo: repoKey, issue: issueKey });

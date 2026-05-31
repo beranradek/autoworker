@@ -81,6 +81,8 @@ export const webhookRoutes: FastifyPluginAsync<WebhookPluginOpts> = async (fasti
       repoKey,
       steps: repo.steps,
       repoToken: repo.repoToken,
+      eventType: parsed.eventType,
+      number: parsed.number,
       reason: parsed.summary,
       enqueuedAt: new Date().toISOString()
     });

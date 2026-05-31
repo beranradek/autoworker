@@ -21,4 +21,6 @@ export interface IssueService {
   markInReview(issue: Issue): Promise<void>;
   unmarkInReview(issue: Issue): Promise<void>;
   unmarkInProgress(issue: Issue): Promise<void>;
+  markUnsatisfiedDependencies(issue: Issue): Promise<void>;
+  unmarkUnsatisfiedDependencies(issue: Issue): Promise<void>;
 }

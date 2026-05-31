@@ -20,6 +20,7 @@ export class GitHubIssueService implements IssueService {
       { name: this.cfg.LABEL_IN_REVIEW,     color: "bfd4f2", description: "Worker is reviewing the PR" },
       { name: this.cfg.LABEL_PR_REVIEWED,   color: "c2e0c6", description: "Worker reviewed the PR" },
       { name: this.cfg.LABEL_HUMAN_NEEDED,  color: "f9d0c4", description: "Human review needed" },
+      { name: this.cfg.LABEL_UNSATISFIED_DEPENDENCIES, color: "d0d7de", description: "Blocked by unmet issue dependencies" },
       // Worker rejection labels (defaults match GitHub's built-in labels)
       { name: "wontfix",     color: "ffffff", description: "This will not be worked on" },
       { name: "invalid",     color: "e4e669", description: "This doesn't seem right" },
@@ -91,12 +92,25 @@ export class GitHubIssueService implements IssueService {
   }
 
   async listPendingIssues(): Promise<PendingIssueInfo[]> {
-    const pending = await this.listIssuesByState("open");
+    const initial = await this.listIssuesByState("open");
+
+    const pending: Issue[] = [];
+    // Filter down to issues that actually mention the worker.
+    const CONCURRENCY = 8;
+    let idxMention = 0;
+    const mentionWorkers = Array.from({ length: Math.min(CONCURRENCY, initial.length) }, async () => {
+      while (true) {
+        const i = idxMention++;
+        if (i >= initial.length) return;
+        const issue = initial[i]!;
+        if (await this.isMentionedByWorker(issue)) pending.push(issue);
+      }
+    });
+    await Promise.all(mentionWorkers);
 
     const blockedByOpen = new Map<number, number[]>();
 
     // Avoid bursting GitHub API with up to 100 concurrent dependency requests.
-    const CONCURRENCY = 8;
     let idx = 0;
     const workers = Array.from({ length: Math.min(CONCURRENCY, pending.length) }, async () => {
       while (true) {
@@ -142,6 +156,7 @@ export class GitHubIssueService implements IssueService {
     opts?: { closeReason?: CloseReason; prReviewOutcome?: PrReviewOutcome }
   ): Promise<void> {
     if (newState === "in_progress") {
+      await this.unmarkUnsatisfiedDependencies(issue);
       await this.addLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
     } else if (newState === "pr_reviewed") {
       await this.addLabel(issue.number, this.cfg.LABEL_PR_REVIEWED);
@@ -300,6 +315,14 @@ export class GitHubIssueService implements IssueService {
 
   async unmarkInProgress(issue: Issue): Promise<void> {
     await this.removeLabel(issue.number, this.cfg.LABEL_IN_PROGRESS);
+  }
+
+  async markUnsatisfiedDependencies(issue: Issue): Promise<void> {
+    await this.addLabel(issue.number, this.cfg.LABEL_UNSATISFIED_DEPENDENCIES);
+  }
+
+  async unmarkUnsatisfiedDependencies(issue: Issue): Promise<void> {
+    await this.removeLabel(issue.number, this.cfg.LABEL_UNSATISFIED_DEPENDENCIES);
   }
 
   private async addLabel(issueNumber: number, label: string): Promise<void> {
