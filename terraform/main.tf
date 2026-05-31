@@ -40,6 +40,7 @@ locals {
   opencode_auth_secret_name = "opencode-auth-json"
   # Webhook secret is optional — only wired once the Key Vault secret exists.
   use_webhook_secret = var.enable_github_webhook_secret
+  use_api_gateway_key = var.enable_api_key
 }
 
 # ---------------------------------------------------------------------------
@@ -183,6 +184,15 @@ resource "azurerm_container_app" "orchestrator" {
   }
 
   dynamic "secret" {
+    for_each = local.use_api_gateway_key ? [1] : []
+    content {
+      name                = "api-key"
+      key_vault_secret_id = "${azurerm_key_vault.kv.vault_uri}secrets/api-key"
+      identity            = azurerm_user_assigned_identity.autoworker.id
+    }
+  }
+
+  dynamic "secret" {
     for_each = local.use_api_key ? [1] : []
     content {
       name                = local.llm_secret_name
@@ -235,6 +245,14 @@ resource "azurerm_container_app" "orchestrator" {
         content {
           name        = "GITHUB_WEBHOOK_SECRET"
           secret_name = "github-webhook-secret"
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.use_api_gateway_key ? [1] : []
+        content {
+          name        = "API_KEY"
+          secret_name = "api-key"
         }
       }
 

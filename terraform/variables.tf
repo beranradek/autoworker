@@ -77,6 +77,12 @@ variable "enable_github_webhook_secret" {
   description = "Set to true once github-webhook-secret has been stored in Key Vault. When false the GITHUB_WEBHOOK_SECRET env var is omitted and the orchestrator skips HMAC verification."
 }
 
+variable "enable_api_key" {
+  type        = bool
+  default     = false
+  description = "Set to true once api-key has been stored in Key Vault. When true, the API_KEY env var is injected into the orchestrator and Bearer-token auth is enforced on /api/* endpoints (including the worker streaming endpoint)."
+}
+
 variable "safety_poll_interval_seconds" {
   type        = number
   default     = 900

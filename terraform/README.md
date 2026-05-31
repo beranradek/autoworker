@@ -73,7 +73,20 @@ az keyvault secret set --vault-name autoworker-kv --name github-token   --value 
 az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."   # or anthropic-api-key / azure-api-key
 ```
 
-The GitHub webhook secret is **optional at first apply**. Set it when you're ready, then re-apply with the flag to wire it in:
+The GitHub webhook secret and API key are **optional at first apply**. Set them when you're ready, then re-apply with the matching flag to wire them in:
+
+```bash
+# API key for Bearer-token auth on /api/* endpoints (worker streaming etc.)
+openssl rand -hex 32   # generate a key
+az keyvault secret set --vault-name autoworker-kv --name api-key --value "<generated-key>"
+terraform apply -var="enable_api_key=true"
+```
+
+Use it:
+```bash
+curl -H "Authorization: Bearer <generated-key>" \
+  https://<orchestrator-fqdn>/workers/<id>/stream
+```
 
 ```bash
 az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret --value "<random-secret>"
