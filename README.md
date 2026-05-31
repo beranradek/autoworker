@@ -118,7 +118,8 @@ Webhooks process 24/7. The safety-net poll runs every `POLL_INTERVAL_SECONDS` (d
 Minimum (local):
 
 - `REPOS` — JSON array of repos with per-repo step flags (see "Repo configuration" below)
-- `GITHUB_TOKEN` (or `GH_TOKEN`)
+- `GITHUB_TOKEN` (or `GH_TOKEN`) when using any `provider:"github"` repo
+- `GITLAB_TOKEN` when using any `provider:"gitlab"` repo (defaults to gitlab.com; use `GITLAB_BASE_URL` for self-managed)
 - `DRY_RUN` (`true` = claim-only, `false` = also runs the worker)
 
 ### Repo configuration
@@ -156,6 +157,7 @@ When `DRY_RUN=false`:
 Optional:
 
 - `GITHUB_WEBHOOK_SECRET` (required for `serve`/webhook mode — see "Webhook mode")
+- `GITLAB_BASE_URL` (default `https://gitlab.com`) — for self-managed GitLab instances
 - `POLL_INTERVAL_SECONDS` (default `900`; in `serve` mode this is the safety-net poll interval)
 - `MAX_ACCEPT_PER_RUN` (default `1`)
 - `MAX_CONCURRENT_WORKERS` (default `5`)

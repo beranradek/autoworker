@@ -3,6 +3,7 @@ import type { Config } from "../config.js";
 import { log } from "../log.js";
 import { createGitHubClient } from "../github/client.js";
 import { GitHubIssueService } from "../issues/github-service.js";
+import { GitLabIssueService } from "../issues/gitlab-service.js";
 import { AcaJobRunner } from "../job-runner/aca.js";
 import { LocalDockerJobRunner } from "../job-runner/local-docker.js";
 import type { JobRunner } from "../job-runner/types.js";
@@ -10,6 +11,7 @@ import { internalWorkerSecret } from "../api-gateway/internal-secret.js";
 import { workerRegistry } from "../api-gateway/worker-registry.js";
 import { validateOpencodeAuthJson } from "../opencode-auth.js";
 import { parseRepos } from "../repos.js";
+import { createGitLabClient } from "../gitlab/client.js";
 import { runOrchestration } from "./orchestrate.js";
 
 export { parseRepos };
@@ -92,16 +94,34 @@ export async function runOnce(): Promise<void> {
 
   for (const repo of repos) {
     const repoKey = `${repo.owner}/${repo.repo}`;
-    if (repo.provider !== "github") {
-      log("warn", "poll.provider_not_supported", { repo: repoKey, provider: repo.provider });
-      continue;
-    }
     log("info", "poll.repo_start", { repo: repoKey, steps: repo.steps });
     try {
-      const githubToken = repo.repoToken ?? cfg.GITHUB_TOKEN;
-      const octokit = createGitHubClient(githubToken);
-      const service = new GitHubIssueService(octokit, { owner: repo.owner, repo: repo.repo }, cfg);
-      await runOrchestration(service, runner, cfg, repoKey, githubToken, repo.steps, workerRegistry);
+      if (repo.provider === "github") {
+        const githubToken = repo.repoToken ?? cfg.GITHUB_TOKEN;
+        if (!githubToken) {
+          log("error", "poll.repo_missing_token", { repo: repoKey, provider: "github", note: "Set GITHUB_TOKEN or repo_token for this repo" });
+          continue;
+        }
+        const octokit = createGitHubClient(githubToken);
+        const service = new GitHubIssueService(octokit, { owner: repo.owner, repo: repo.repo }, cfg);
+        await runOrchestration(service, runner, cfg, repoKey, githubToken, repo.steps, workerRegistry);
+        continue;
+      }
+
+      if (repo.provider === "gitlab") {
+        const gitlabToken = repo.repoToken ?? cfg.GITLAB_TOKEN;
+        if (!gitlabToken) {
+          log("error", "poll.repo_missing_token", { repo: repoKey, provider: "gitlab", note: "Set GITLAB_TOKEN or repo_token for this repo" });
+          continue;
+        }
+        const client = createGitLabClient({ baseUrl: cfg.GITLAB_BASE_URL, token: gitlabToken });
+        const projectPath = encodeURIComponent(`${repo.owner}/${repo.repo}`);
+        const service = new GitLabIssueService(client, projectPath, cfg);
+        await runOrchestration(service, runner, cfg, repoKey, gitlabToken, repo.steps, workerRegistry);
+        continue;
+      }
+
+      log("warn", "poll.provider_not_supported", { repo: repoKey, provider: repo.provider });
     } catch (err) {
       log("error", "poll.repo_error", { repo: repoKey, error: String(err) });
     }

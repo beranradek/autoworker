@@ -4,6 +4,9 @@ import { parseRepos } from "./repos.js";
 const schema = z.object({
   GH_TOKEN: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
+  GITLAB_TOKEN: z.string().optional(),
+  // Base URL for self-managed GitLab. Defaults to gitlab.com.
+  GITLAB_BASE_URL: z.string().url().default("https://gitlab.com"),
   // New: JSON array of repo configs with per-repo step flags. Example:
   //   [{"provider":"github","slug":"owner/repo","steps":["impl","review","merge"]}]
   // Steps default to ["impl","review"] when omitted on an entry.
@@ -104,9 +107,7 @@ const schema = z.object({
 });
 
 type RawConfig = z.infer<typeof schema>;
-// Config narrows GITHUB_TOKEN to non-optional (validated in getConfig).
-// All other optional fields keep their schema types.
-export type Config = Omit<RawConfig, "GITHUB_TOKEN"> & { GITHUB_TOKEN: string };
+export type Config = RawConfig;
 
 export function getConfig(): Config {
   const env = { ...process.env } as Record<string, string | undefined>;
@@ -115,9 +116,6 @@ export function getConfig(): Config {
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
-  }
-  if (!parsed.data.GITHUB_TOKEN) {
-    throw new Error("Missing GitHub auth: provide GITHUB_TOKEN (or GH_TOKEN)");
   }
   if (!parsed.data.REPOS?.trim() && !parsed.data.GITHUB_REPOS?.trim()) {
     throw new Error("Missing repo configuration: provide REPOS (JSON) or GITHUB_REPOS (deprecated)");

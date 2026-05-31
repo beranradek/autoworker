@@ -39,7 +39,12 @@ async function consumeWebhooks(
 
     log("info", "webhook.process_start", { repo: job.repoKey, reason: job.reason });
     try {
+      // Webhook mode currently supports GitHub events only.
       const githubToken = job.repoToken ?? cfg.GITHUB_TOKEN;
+      if (!githubToken) {
+        log("error", "webhook.repo_missing_token", { repo: job.repoKey, provider: "github", note: "Set GITHUB_TOKEN or repo_token for this repo" });
+        continue;
+      }
       const octokit = createGitHubClient(githubToken);
       const service = new GitHubIssueService(octokit, job.repo, cfg);
       await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, githubToken, job.steps, workerRegistry));
