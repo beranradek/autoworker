@@ -73,20 +73,7 @@ az keyvault secret set --vault-name autoworker-kv --name github-token   --value 
 az keyvault secret set --vault-name autoworker-kv --name openai-api-key --value "sk-..."   # or anthropic-api-key / azure-api-key
 ```
 
-The GitHub webhook secret and API key are **optional at first apply**. Set them when you're ready, then re-apply with the matching flag to wire them in:
-
-```bash
-# API key for Bearer-token auth on /api/* endpoints (worker streaming etc.)
-openssl rand -hex 32   # generate a key
-az keyvault secret set --vault-name autoworker-kv --name api-key --value "<generated-key>"
-terraform apply -var="enable_api_key=true"
-```
-
-Use it:
-```bash
-curl -H "Authorization: Bearer <generated-key>" \
-  https://<orchestrator-fqdn>/workers/<id>/stream
-```
+The GitHub webhook secret is **optional at first apply**. Set it when you're ready, then re-apply with the flag to wire it in:
 
 ```bash
 az keyvault secret set --vault-name autoworker-kv --name github-webhook-secret --value "<random-secret>"
@@ -131,6 +118,37 @@ Take the `webhook_url` output and add it as a webhook (repo or org Settings → 
 
 The orchestrator reacts to events immediately and also runs a safety-net poll
 (see `safety_poll_interval_seconds`, default 900s) to catch any missed delivery.
+
+## API key for the worker streaming endpoint
+
+The orchestrator exposes `/api/*` endpoints (worker list, SSE streaming) protected by Bearer-token auth. The `/api/*` endpoints **always reject unauthenticated requests** — even when `API_KEY` is not configured — so they are never accidentally public.
+
+To enable authenticated access:
+
+**1. Generate a key and store it in Key Vault:**
+
+```bash
+openssl rand -hex 32   # copy the output
+az keyvault secret set --vault-name autoworker-kv --name api-key --value "<generated-key>"
+```
+
+**2. Wire it into the Container App:**
+
+```bash
+terraform apply -var="enable_api_key=true"
+```
+
+**3. Use it:**
+
+```bash
+# List active workers
+curl -H "Authorization: Bearer <key>" https://<orchestrator-fqdn>/api/workers
+
+# Stream events for a worker
+curl -H "Authorization: Bearer <key>" https://<orchestrator-fqdn>/api/workers/<id>/stream
+```
+
+The `enable_api_key` variable defaults to `false`. When false, the `API_KEY` env var is omitted from the Container App and every `/api/*` request returns 401.
 
 ## Changing poll interval or model
 
