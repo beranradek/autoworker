@@ -47,7 +47,9 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `GH_TOKEN=${input.githubToken}`,
       "-e",
-      `GITHUB_TOKEN=${input.githubToken}`
+      `GITHUB_TOKEN=${input.githubToken}`,
+      "-e",
+      `GITLAB_TOKEN=${input.githubToken}`
     ];
     if (input.openaiApiKey) args.push("-e", `OPENAI_API_KEY=${input.openaiApiKey}`);
     if (input.anthropicApiKey) args.push("-e", `ANTHROPIC_API_KEY=${input.anthropicApiKey}`);
@@ -97,7 +99,9 @@ export class LocalDockerJobRunner implements JobRunner {
       "-e",
       `GH_TOKEN=${input.githubToken}`,
       "-e",
-      `GITHUB_TOKEN=${input.githubToken}`
+      `GITHUB_TOKEN=${input.githubToken}`,
+      "-e",
+      `GITLAB_TOKEN=${input.githubToken}`
     ];
     if (input.openaiApiKey) args.push("-e", `OPENAI_API_KEY=${input.openaiApiKey}`);
     if (input.anthropicApiKey) args.push("-e", `ANTHROPIC_API_KEY=${input.anthropicApiKey}`);

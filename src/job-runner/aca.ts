@@ -70,6 +70,7 @@ export class AcaJobRunner implements JobRunner {
       env: {
         GH_TOKEN: input.githubToken,
         GITHUB_TOKEN: input.githubToken,
+        GITLAB_TOKEN: input.githubToken,
         ...(input.openaiApiKey ? { OPENAI_API_KEY: input.openaiApiKey } : {}),
         ...(input.anthropicApiKey ? { ANTHROPIC_API_KEY: input.anthropicApiKey } : {}),
         ...(input.azureApiKey ? { AZURE_API_KEY: input.azureApiKey } : {}),
@@ -107,6 +108,7 @@ export class AcaJobRunner implements JobRunner {
       env: {
         GH_TOKEN: input.githubToken,
         GITHUB_TOKEN: input.githubToken,
+        GITLAB_TOKEN: input.githubToken,
         ...(input.openaiApiKey ? { OPENAI_API_KEY: input.openaiApiKey } : {}),
         ...(input.anthropicApiKey ? { ANTHROPIC_API_KEY: input.anthropicApiKey } : {}),
         ...(input.azureApiKey ? { AZURE_API_KEY: input.azureApiKey } : {}),
