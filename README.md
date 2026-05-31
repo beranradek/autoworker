@@ -128,13 +128,14 @@ Minimum (local):
 - `provider`: `"github"` (only one wired up today) or `"gitlab"` (parsed but skipped at runtime until a GitLab service is implemented).
 - `slug`: `"owner/repo"`.
 - `steps` (optional): subset of `["impl","review","merge"]`. Defaults to `["impl","review"]` when omitted — `merge` (auto-merge of approved PRs) must be opted in per repo.
+- `repo_token` (optional): per-repo access token (PAT). When set, overrides the global `GITHUB_TOKEN`/`GH_TOKEN` for this repo only. Provider-agnostic name to support future GitLab wiring.
 
 Example — enable auto-merge only for one repo:
 
 ```json
 [
   {"provider":"github","slug":"username/reponame"},
-  {"provider":"github","slug":"username2/reponame2","steps":["impl","review","merge"]}
+  {"provider":"github","slug":"username2/reponame2","steps":["impl","review","merge"],"repo_token":"ghp_per_repo_token"}
 ]
 ```
 

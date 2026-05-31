@@ -79,8 +79,6 @@ export function validateAuthIfNeeded(cfg: Config): void {
 
 export async function runOnce(): Promise<void> {
   const cfg = getConfig();
-  const octokit = createGitHubClient(cfg.GITHUB_TOKEN);
-
   const repos = parseRepos(cfg);
 
   log("info", "poll.start", {
@@ -100,8 +98,10 @@ export async function runOnce(): Promise<void> {
     }
     log("info", "poll.repo_start", { repo: repoKey, steps: repo.steps });
     try {
+      const githubToken = repo.repoToken ?? cfg.GITHUB_TOKEN;
+      const octokit = createGitHubClient(githubToken);
       const service = new GitHubIssueService(octokit, { owner: repo.owner, repo: repo.repo }, cfg);
-      await runOrchestration(service, runner, cfg, repoKey, repo.steps, workerRegistry);
+      await runOrchestration(service, runner, cfg, repoKey, githubToken, repo.steps, workerRegistry);
     } catch (err) {
       log("error", "poll.repo_error", { repo: repoKey, error: String(err) });
     }

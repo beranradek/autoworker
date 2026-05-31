@@ -17,7 +17,6 @@ import { buildRunner, parseRepos, validateAuthIfNeeded } from "./run-once.js";
 import { pollLoop } from "./poll.js";
 import { runOrchestration } from "./orchestrate.js";
 import type { Config } from "../config.js";
-import type { Octokit } from "@octokit/rest";
 import type { JobRunner } from "../job-runner/types.js";
 
 /**
@@ -29,7 +28,6 @@ import type { JobRunner } from "../job-runner/types.js";
  */
 async function consumeWebhooks(
   queue: FifoQueue,
-  octokit: Octokit,
   runner: JobRunner,
   cfg: Config,
   lock: Mutex
@@ -41,8 +39,10 @@ async function consumeWebhooks(
 
     log("info", "webhook.process_start", { repo: job.repoKey, reason: job.reason });
     try {
+      const githubToken = job.repoToken ?? cfg.GITHUB_TOKEN;
+      const octokit = createGitHubClient(githubToken);
       const service = new GitHubIssueService(octokit, job.repo, cfg);
-      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, job.steps, workerRegistry));
+      await lock.run(() => runOrchestration(service, runner, cfg, job.repoKey, githubToken, job.steps, workerRegistry));
       markWebhookProcessed(job.repoKey, queue.depth);
       log("info", "webhook.process_done", { repo: job.repoKey });
     } catch (err) {
@@ -69,7 +69,6 @@ export async function serve(): Promise<void> {
     });
   }
 
-  const octokit = createGitHubClient(cfg.GITHUB_TOKEN);
   const repos = parseRepos(cfg);
   validateAuthIfNeeded(cfg);
   const runner = buildRunner(cfg);
@@ -91,5 +90,5 @@ export async function serve(): Promise<void> {
   // Run the webhook consumer and the safety-net poll concurrently. Both share
   // the lock so orchestration runs never overlap. Neither resolves; if either
   // throws fatally, surface it so the process exits and the platform restarts it.
-  await Promise.race([consumeWebhooks(queue, octokit, runner, cfg, lock), pollLoop({ lock })]);
+  await Promise.race([consumeWebhooks(queue, runner, cfg, lock), pollLoop({ lock })]);
 }

@@ -81,14 +81,14 @@ describe("runOrchestration – impl step", () => {
       listIssuesByState: vi.fn().mockResolvedValue([makeIssue()])
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
     expect(service.listIssuesByState).toHaveBeenCalledWith("open");
   });
 
   it("does NOT call listIssuesByState('open') when steps.impl=false", async () => {
     const service = makeService();
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_NONE);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_NONE);
     expect(service.listIssuesByState).not.toHaveBeenCalledWith("open");
   });
 
@@ -99,7 +99,7 @@ describe("runOrchestration – impl step", () => {
       isMentionedByWorker: vi.fn().mockResolvedValue(true)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
     expect(service.transitionTo).toHaveBeenCalledWith(issue, "in_progress");
     expect(runner.runIssue).toHaveBeenCalledOnce();
     expect(runner.runIssue).toHaveBeenCalledWith(expect.objectContaining({ issueUrl: issue.url }));
@@ -112,7 +112,7 @@ describe("runOrchestration – impl step", () => {
       isMentionedByWorker: vi.fn().mockResolvedValue(false)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
     expect(service.transitionTo).not.toHaveBeenCalled();
     expect(runner.runIssue).not.toHaveBeenCalled();
   });
@@ -124,7 +124,7 @@ describe("runOrchestration – impl step", () => {
       isMentionedByWorker: vi.fn().mockResolvedValue(true)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig({ DRY_RUN: true }), "owner/repo", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig({ DRY_RUN: true }), "owner/repo", "tok", STEPS_IMPL_ONLY);
     expect(service.transitionTo).toHaveBeenCalledWith(issue, "in_progress");
     expect(runner.runIssue).not.toHaveBeenCalled();
   });
@@ -139,7 +139,7 @@ describe("runOrchestration – impl step", () => {
     service.transitionTo = vi.fn(async () => { callOrder.push("transitionTo"); });
     const runner = makeRunner();
     runner.runIssue = vi.fn(async () => { callOrder.push("runIssue"); return { runner: "local-docker" as const }; });
-    await runOrchestration(service, runner, makeConfig(), "o/r", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "o/r", "tok", STEPS_IMPL_ONLY);
     expect(callOrder).toEqual(["transitionTo", "runIssue"]);
   });
 
@@ -151,7 +151,7 @@ describe("runOrchestration – impl step", () => {
       isMentionedByWorker: vi.fn().mockResolvedValue(true)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig({ MAX_ACCEPT_PER_RUN: 1 }), "owner/repo", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig({ MAX_ACCEPT_PER_RUN: 1 }), "owner/repo", "tok", STEPS_IMPL_ONLY);
     expect(runner.runIssue).toHaveBeenCalledOnce();
     expect(service.transitionTo).toHaveBeenCalledOnce();
   });
@@ -168,7 +168,7 @@ describe("runOrchestration – merge step", () => {
       findLinkedPr: vi.fn().mockResolvedValue(pr)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_MERGE_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_MERGE_ONLY);
     expect(service.mergePr).toHaveBeenCalledWith(pr);
     expect(service.transitionTo).toHaveBeenCalledWith(issue, "closed", { closeReason: "completed" });
   });
@@ -183,7 +183,7 @@ describe("runOrchestration – merge step", () => {
       findLinkedPr: vi.fn().mockResolvedValue(pr)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_IMPL_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_IMPL_ONLY);
     expect(service.mergePr).not.toHaveBeenCalled();
   });
 
@@ -195,7 +195,7 @@ describe("runOrchestration – merge step", () => {
       )
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_MERGE_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_MERGE_ONLY);
     expect(service.mergePr).not.toHaveBeenCalled();
     expect(service.transitionTo).not.toHaveBeenCalled();
   });
@@ -209,7 +209,7 @@ describe("runOrchestration – merge step", () => {
       findLinkedPr: vi.fn().mockResolvedValue(null)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig(), "owner/repo", STEPS_MERGE_ONLY);
+    await runOrchestration(service, runner, makeConfig(), "owner/repo", "tok", STEPS_MERGE_ONLY);
     expect(service.mergePr).not.toHaveBeenCalled();
     expect(service.transitionTo).not.toHaveBeenCalled();
   });
@@ -222,7 +222,7 @@ describe("runOrchestration – review step", () => {
   it("calls listIssuesByState('pr_created') when steps.review=true", async () => {
     const service = makeService();
     const runner = makeRunner();
-    await runOrchestration(service, runner, prReviewConfig, "owner/repo", STEPS_REVIEW_ONLY);
+    await runOrchestration(service, runner, prReviewConfig, "owner/repo", "tok", STEPS_REVIEW_ONLY);
     expect(service.listIssuesByState).toHaveBeenCalledWith("pr_created");
   });
 
@@ -240,7 +240,7 @@ describe("runOrchestration – review step", () => {
     const runner = makeRunner();
     (runner.runPrReview as ReturnType<typeof vi.fn>).mockImplementation(() => { markOrder.push("run"); return Promise.resolve({ runner: "local-docker" }); });
 
-    await runOrchestration(service, runner, prReviewConfig, "owner/repo", STEPS_REVIEW_ONLY);
+    await runOrchestration(service, runner, prReviewConfig, "owner/repo", "tok", STEPS_REVIEW_ONLY);
 
     expect(service.markInReview).toHaveBeenCalledWith(issue);
     expect(runner.runPrReview).toHaveBeenCalledOnce();
@@ -263,7 +263,7 @@ describe("runOrchestration – review step", () => {
       runPrReview: vi.fn().mockRejectedValue(new Error("job create failed"))
     });
 
-    await expect(runOrchestration(service, runner, prReviewConfig, "owner/repo", STEPS_REVIEW_ONLY)).resolves.not.toThrow();
+    await expect(runOrchestration(service, runner, prReviewConfig, "owner/repo", "tok", STEPS_REVIEW_ONLY)).resolves.not.toThrow();
     expect(service.unmarkInReview).toHaveBeenCalledWith(issue);
   });
 
@@ -276,7 +276,7 @@ describe("runOrchestration – review step", () => {
       isInReview: vi.fn().mockResolvedValue(true)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, prReviewConfig, "owner/repo", STEPS_REVIEW_ONLY);
+    await runOrchestration(service, runner, prReviewConfig, "owner/repo", "tok", STEPS_REVIEW_ONLY);
     expect(runner.runPrReview).not.toHaveBeenCalled();
     expect(service.markInReview).not.toHaveBeenCalled();
   });
@@ -291,7 +291,7 @@ describe("runOrchestration – review step", () => {
       findLinkedPr: vi.fn().mockResolvedValue(null)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, prReviewConfig, "owner/repo", STEPS_REVIEW_ONLY);
+    await runOrchestration(service, runner, prReviewConfig, "owner/repo", "tok", STEPS_REVIEW_ONLY);
     expect(runner.runPrReview).not.toHaveBeenCalled();
     expect(service.markInReview).not.toHaveBeenCalled();
   });
@@ -306,7 +306,7 @@ describe("runOrchestration – review step", () => {
       findLinkedPr: vi.fn().mockResolvedValue(pr)
     });
     const runner = makeRunner();
-    await runOrchestration(service, runner, makeConfig({ DRY_RUN: true }), "owner/repo", STEPS_REVIEW_ONLY);
+    await runOrchestration(service, runner, makeConfig({ DRY_RUN: true }), "owner/repo", "tok", STEPS_REVIEW_ONLY);
     expect(runner.runPrReview).not.toHaveBeenCalled();
     expect(service.markInReview).not.toHaveBeenCalled();
   });
@@ -328,7 +328,7 @@ describe("runOrchestration – review step", () => {
       .mockResolvedValueOnce(undefined);
     const runner = makeRunner();
     await expect(
-      runOrchestration(service, runner, prReviewConfig, "owner/repo", STEPS_REVIEW_ONLY)
+      runOrchestration(service, runner, prReviewConfig, "owner/repo", "tok", STEPS_REVIEW_ONLY)
     ).resolves.not.toThrow();
     // second issue should still be processed despite first failing
     expect(runner.runPrReview).toHaveBeenCalledOnce();

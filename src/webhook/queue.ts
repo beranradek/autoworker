@@ -5,6 +5,8 @@ export type WebhookJob = {
   repo: RepoRef;
   repoKey: string;
   steps: RepoSteps;
+  /** Optional per-repo access token override (PAT). */
+  repoToken?: string;
   /** Human-readable description of the event that triggered this job (for logs). */
   reason: string;
   enqueuedAt: string;

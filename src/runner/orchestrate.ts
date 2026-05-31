@@ -10,6 +10,7 @@ export async function runOrchestration(
   runner: JobRunner,
   cfg: Config,
   repoKey: string,
+  githubToken: string,
   steps: RepoSteps,
   registry?: WorkerRegistry
 ): Promise<void> {
@@ -56,7 +57,7 @@ export async function runOrchestration(
             prUrl: pr.url,
             prBranch: pr.branch,
             baseBranch: pr.baseBranch,
-            githubToken: cfg.GITHUB_TOKEN,
+            githubToken,
             openaiApiKey: cfg.OPENAI_API_KEY,
             anthropicApiKey: cfg.ANTHROPIC_API_KEY,
             azureApiKey: cfg.AZURE_API_KEY,
@@ -132,7 +133,7 @@ export async function runOrchestration(
         await service.transitionTo(issue, "in_progress");
         const result = await runner.runIssue({
           issueUrl: issue.url,
-          githubToken: cfg.GITHUB_TOKEN,
+          githubToken,
           openaiApiKey: cfg.OPENAI_API_KEY,
           anthropicApiKey: cfg.ANTHROPIC_API_KEY,
           azureApiKey: cfg.AZURE_API_KEY,

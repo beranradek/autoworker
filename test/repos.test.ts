@@ -59,6 +59,14 @@ describe("parseRepos – REPOS (JSON)", () => {
     expect(parseRepos(cfg)[0].steps).toEqual({ impl: true, review: true, merge: false });
   });
 
+  it("supports per-repo token override via repo_token", () => {
+    const cfg = makeConfig({
+      REPOS: JSON.stringify([{ provider: "github", slug: "owner/repo", repo_token: "per-repo-token" }])
+    });
+    const repos = parseRepos(cfg);
+    expect(repos[0]).toMatchObject({ provider: "github", owner: "owner", repo: "repo", repoToken: "per-repo-token" });
+  });
+
   it("allows enabling merge for one repo only (the requested use case)", () => {
     const cfg = makeConfig({
       REPOS: JSON.stringify([

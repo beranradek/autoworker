@@ -15,6 +15,11 @@ export type RepoConfig = {
   owner: string;
   repo: string;
   steps: RepoSteps;
+  /**
+   * Optional per-repo access token (PAT). When set, overrides any global token
+   * for this repo. Named provider-agnostically to support GitHub/GitLab.
+   */
+  repoToken?: string;
 };
 
 const STEP_TOKEN = z.enum(["impl", "review", "merge"]);
@@ -22,7 +27,8 @@ const STEP_TOKEN = z.enum(["impl", "review", "merge"]);
 const REPO_ENTRY = z.object({
   provider: z.enum(["github", "gitlab"]),
   slug: z.string().regex(/^[^/\s]+\/[^/\s]+$/, "slug must be 'owner/repo'"),
-  steps: z.array(STEP_TOKEN).optional()
+  steps: z.array(STEP_TOKEN).optional(),
+  repo_token: z.string().optional()
 });
 
 const REPOS_SCHEMA = z.array(REPO_ENTRY).min(1);
@@ -81,7 +87,8 @@ export function parseRepos(cfg: Config): RepoConfig[] {
         provider: entry.provider,
         owner,
         repo,
-        steps: toSteps(entry.steps)
+        steps: toSteps(entry.steps),
+        ...(entry.repo_token ? { repoToken: entry.repo_token } : {})
       };
     });
   }
