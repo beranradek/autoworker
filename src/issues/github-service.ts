@@ -336,7 +336,11 @@ export class GitHubIssueService implements IssueService {
           owner: this.repo.owner,
           repo: this.repo.repo,
           issue_number: issueNumber,
-          per_page: 100
+          per_page: 100,
+          headers: {
+            accept: "application/vnd.github+json",
+            "x-github-api-version": "2022-11-28"
+          }
         }
       );
 

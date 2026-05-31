@@ -31,8 +31,12 @@ type GitLabMergeRequest = {
 };
 
 type GitLabIssueLink = {
-  link_type: string;
-  issue: { iid: number; state: "opened" | "closed" };
+  link_type?: string;
+  // GitLab Issue links API returns linked issue attributes at the top level.
+  // We also accept a nested `issue` shape to be tolerant to test/mocks or future changes.
+  issue?: { iid?: number; state?: "opened" | "closed" } | null;
+  iid?: number;
+  state?: "opened" | "closed";
 };
 
 function resolveState(requested: IssueState, labels: string[], cfg: Config): IssueState | null {
@@ -198,7 +202,7 @@ export class GitLabIssueService implements IssueService {
       await this.removeLabel(issue.number, this.cfg.LABEL_HUMAN_NEEDED);
       // Close the issue.
       await this.client.requestNoBody("PUT", `projects/${this.projectPath}/issues/${issue.number}`, {
-        body: { state_event: "close", state_reason: opts?.closeReason ?? "completed" }
+        body: { state_event: "close" }
       });
       return;
     }
@@ -276,10 +280,14 @@ export class GitLabIssueService implements IssueService {
         `projects/${this.projectPath}/issues/${issueIid}/links`
       );
       const deps = (links.data ?? [])
-        .filter((l) => l && (l as any).link_type === "is_blocked_by")
-        .map((l) => (l as any).issue)
-        .filter((i) => i && i.state !== "closed")
-        .map((i) => i.iid)
+        .filter((l) => l && String(l.link_type ?? "").toLowerCase() === "is_blocked_by")
+        .map((l) => {
+          const iid = l.issue?.iid ?? l.iid;
+          const state = l.issue?.state ?? l.state;
+          return { iid, state };
+        })
+        .filter((l) => String(l.state ?? "").toLowerCase() !== "closed")
+        .map((l) => l.iid)
         .filter((n) => typeof n === "number");
       return deps;
     } catch (err: unknown) {
@@ -296,4 +304,3 @@ export class GitLabIssueService implements IssueService {
     }
   }
 }
-
