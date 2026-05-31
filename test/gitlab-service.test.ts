@@ -36,7 +36,7 @@ describe("GitLabIssueService", () => {
         { iid: 2, web_url: "u2", state: "opened", title: "b", description: "", labels: ["in-progress"] },
       ]
     });
-    const svc = new GitLabIssueService(client, "o%2Fr", makeCfg());
+    const svc = new GitLabIssueService(client, "o%2Fr", makeCfg() as any);
     const res = await svc.listIssuesByState("open");
     expect(res.map((i) => i.number)).toEqual([1]);
   });
@@ -52,7 +52,7 @@ describe("GitLabIssueService", () => {
         { link_type: "is_blocked_by", issue: { iid: 1, state: "opened" } }
       ],
     });
-    const svc = new GitLabIssueService(client, "o%2Fr", makeCfg());
+    const svc = new GitLabIssueService(client, "o%2Fr", makeCfg() as any);
     const res = await svc.listPendingIssues();
     expect(res.map((i) => i.number)).toEqual([1, 2]);
     expect(res[0]).toMatchObject({ ready: true, blocksCount: 1 });
@@ -66,7 +66,7 @@ describe("GitLabIssueService", () => {
         { iid: 2, web_url: "mr2", source_branch: "b", target_branch: "main", state: "opened" },
       ],
     });
-    const svc = new GitLabIssueService(client, "o%2Fr", makeCfg());
+    const svc = new GitLabIssueService(client, "o%2Fr", makeCfg() as any);
     const pr = await svc.findLinkedPr({ number: 7, url: "u", title: "", body: "", state: "open", labels: [] });
     expect(pr).toMatchObject({ number: 2, url: "mr2", branch: "b", baseBranch: "main" });
   });

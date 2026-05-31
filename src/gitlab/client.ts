@@ -55,12 +55,20 @@ export function createGitLabClient(input: { baseUrl: string; token: string }): G
 
   return {
     baseUrl,
-    async requestJson<T>(method, path, opts) {
+    async requestJson<T>(
+      method: "GET" | "POST" | "PUT",
+      path: string,
+      opts?: { query?: Record<string, string | number | undefined>; body?: Record<string, unknown> }
+    ) {
       const res = await requestRaw(method, path, opts);
       const data = (await res.json()) as T;
       return { data, headers: res.headers };
     },
-    async requestNoBody(method, path, opts) {
+    async requestNoBody(
+      method: "POST" | "PUT",
+      path: string,
+      opts?: { query?: Record<string, string | number | undefined>; body?: Record<string, unknown> }
+    ) {
       const res = await requestRaw(method, path, opts);
       return { headers: res.headers };
     }
@@ -86,4 +94,3 @@ export async function paginateGitLab<T>(client: GitLabClient, path: string, quer
   }
   return all;
 }
-
