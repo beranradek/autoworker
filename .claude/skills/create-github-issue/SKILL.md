@@ -57,6 +57,7 @@ Example: list which issues a given issue is blocked by:
 ```bash
 N=123
 gh api -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
   "/repos/${REPO}/issues/${N}/dependencies/blocked_by"
 ```
 
@@ -64,6 +65,7 @@ Example: list which issues a given issue is blocking:
 
 ```bash
 gh api -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
   "/repos/${REPO}/issues/${N}/dependencies/blocking"
 ```
 
@@ -152,9 +154,10 @@ The GitHub REST endpoint requires the dependency issue **ID** (not the issue num
 For each prerequisite issue `DEP_NUM`:
 
 ```bash
-DEP_ID="$(gh api -H "Accept: application/vnd.github+json" "/repos/${REPO}/issues/${DEP_NUM}" -q .id)"
+DEP_ID="$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "/repos/${REPO}/issues/${DEP_NUM}" -q .id)"
 
 gh api -X POST -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
   "/repos/${REPO}/issues/${NEW_NUM}/dependencies/blocked_by" \
   -f "issue_id=${DEP_ID}"
 ```
@@ -163,6 +166,7 @@ Verify:
 
 ```bash
 gh api -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
   "/repos/${REPO}/issues/${NEW_NUM}/dependencies/blocked_by" \
   -q '.[] | {number,title,state,url}'
 ```
